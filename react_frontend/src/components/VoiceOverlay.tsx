@@ -206,58 +206,34 @@ export default function VoiceOverlay() {
     };
 
     return (
-        <div style={{
-            position: 'fixed',
-            bottom: '40px',
-            right: '40px',
-            zIndex: 9999,
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'flex-end',
-            gap: '20px'
-        }}>
+        <div className="fixed bottom-6 right-6 md:bottom-10 md:right-10 z-[9999] flex flex-col items-end gap-5">
             
             {/* Transcript Pop-up Panel */}
             {isOpen && (
-                <div className="glass-panel" style={{
-                    width: '350px',
-                    padding: '24px', 
-                    animation: 'slideUpFade 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards',
-                    transformOrigin: 'bottom right'
-                }}>
-                    <div style={{
-                        display: 'inline-block',
-                        padding: '6px 14px',
-                        borderRadius: '50px',
-                        backgroundColor: 'var(--accent-gold-transparent-light)',
-                        border: '1px solid var(--border-gold)',
-                        color: 'var(--accent-gold)',
-                        fontSize: '11px',
-                        fontWeight: '600',
-                        letterSpacing: '0.1em',
-                        textTransform: 'uppercase',
-                        marginBottom: '16px'
-                    }}>
-                        {isRecording ? "Live Transcript" : "Disconnected"}
+                <div 
+                    className="bg-surface-dim/80 backdrop-blur-xl border border-[rgba(212,175,55,0.15)] rounded-2xl w-[350px] p-6 shadow-[0_8px_32px_rgba(0,0,0,0.4)] origin-bottom-right"
+                    style={{ animation: 'slideUpFade 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards' }}
+                >
+                    <div className="inline-flex items-center gap-xs px-md py-xxs border gold-border rounded-full bg-surface-dim/50 backdrop-blur-md mb-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
+                        {isRecording && <span className="w-1.5 h-1.5 rounded-full bg-error mr-2"></span>}
+                        <span className="font-label-caps text-label-caps tracking-widest text-primary uppercase">
+                            {isRecording ? "Live Transcript" : "Disconnected"}
+                        </span>
                     </div>
                     
-                    <div style={{
-                        maxHeight: '250px',
-                        overflowY: 'auto',
-                        paddingRight: '12px' // for scrollbar space
-                    }}>
-                        <p style={{ fontSize: '1rem', color: 'var(--text-primary)', margin: 0, minHeight: '50px' }}>
+                    <div className="max-h-[250px] overflow-y-auto pr-3 scrollbar-thin scrollbar-thumb-white/20 scrollbar-track-transparent">
+                        <p className="font-body-md text-on-surface m-0 min-h-[50px] leading-relaxed">
                             {transcript.length === 0 && isRecording && (
-                                <span style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>
+                                <span className="text-on-surface-variant italic">
                                     I'm listening...
                                 </span>
                             )}
                             {transcript.map((text, idx) => (
-                                <span key={idx} style={{ 
-                                    opacity: 0,
-                                    animation: 'fadeInText 0.5s ease forwards',
-                                    marginRight: '6px'
-                                }}>
+                                <span 
+                                    key={idx} 
+                                    className="mr-1.5 inline-block"
+                                    style={{ animation: 'fadeInText 0.5s ease forwards', opacity: 0 }}
+                                >
                                     {text}
                                 </span>
                             ))}
@@ -269,35 +245,15 @@ export default function VoiceOverlay() {
             {/* Floating Action Button */}
             <button 
                 onClick={handleToggle}
-                onMouseEnter={(e) => {
-                    e.currentTarget.style.transform = 'translateY(-2px) scale(1.05)';
-                }}
-                onMouseLeave={(e) => {
-                    e.currentTarget.style.transform = 'translateY(0) scale(1)';
-                }}
-                style={{
-                    width: '64px',
-                    height: '64px',
-                    borderRadius: '50%',
-                    backgroundColor: isRecording ? '#cc3333' : '#d4af37',
-                    border: 'none',
-                    cursor: 'pointer',
-                    boxShadow: isRecording ? '0 0 30px rgba(204, 51, 51, 0.5)' : '0 10px 25px rgba(212, 175, 55, 0.4)',
-                    transition: 'all 0.3s cubic-bezier(0.16, 1, 0.3, 1)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                }}
+                className={`w-16 h-16 rounded-full flex items-center justify-center transition-all duration-300 border-none cursor-pointer transform hover:-translate-y-1 hover:scale-105 shadow-2xl ${
+                    isRecording 
+                        ? 'bg-[#cc3333] shadow-[0_0_30px_rgba(204,51,51,0.5)]' 
+                        : 'bg-primary-container shadow-[0_10px_25px_rgba(212,175,55,0.4)]'
+                }`}
             >
                 {/* Icon inside the button (Microphone) */}
                 {isRecording ? (
-                    <div style={{
-                        width: '20px',
-                        height: '20px',
-                        backgroundColor: '#ffffff',
-                        borderRadius: '4px',
-                        animation: 'pulseSquare 1.5s infinite'
-                    }} />
+                    <div className="w-5 h-5 bg-white rounded-sm" style={{ animation: 'pulseSquare 1.5s infinite' }} />
                 ) : (
                     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                         <path d="M12 14C13.6569 14 15 12.6569 15 11V5C15 3.34315 13.6569 2 12 2C10.3431 2 9 3.34315 9 5V11C9 12.6569 10.3431 14 12 14Z" fill="#050505"/>
@@ -321,6 +277,17 @@ export default function VoiceOverlay() {
                     0% { transform: scale(0.95); }
                     50% { transform: scale(1.1); }
                     100% { transform: scale(0.95); }
+                }
+                /* Custom Scrollbar for transcript */
+                .scrollbar-thin::-webkit-scrollbar {
+                    width: 4px;
+                }
+                .scrollbar-thin::-webkit-scrollbar-track {
+                    background: transparent;
+                }
+                .scrollbar-thin::-webkit-scrollbar-thumb {
+                    background: rgba(255, 255, 255, 0.2);
+                    border-radius: 4px;
                 }
                 `}
             </style>

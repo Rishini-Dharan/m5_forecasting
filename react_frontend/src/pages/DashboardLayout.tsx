@@ -1,4 +1,4 @@
-import React from 'react';
+
 import { Link, Outlet, useNavigate } from 'react-router-dom';
 import VoiceOverlay from '../components/VoiceOverlay';
 
@@ -12,74 +12,49 @@ export default function DashboardLayout() {
   };
 
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
+    <div className="min-h-screen flex flex-col bg-background text-on-surface font-body-md relative overflow-x-hidden selection:bg-primary-container selection:text-on-primary-container">
       
       {/* Top Navigation */}
-      <nav style={{ 
-          margin: '24px auto',
-          width: '100%',
-          maxWidth: '1440px',
-          padding: '0 24px',
-          display: 'flex', 
-          justifyContent: 'center'
-      }}>
-          <div className="glass-panel" style={{
-              display: 'flex',
-              alignItems: 'center',
-              width: '100%',
-              padding: '16px 32px',
-              gap: '32px'
-          }}>
-              <div style={{ 
-                  fontWeight: '800', 
-                  fontSize: '1.5rem', 
-                  letterSpacing: '0.05em',
-                  background: 'linear-gradient(135deg, #ffffff 0%, #d4af37 100%)',
-                  WebkitBackgroundClip: 'text',
-                  WebkitTextFillColor: 'transparent',
-                  cursor: 'default'
-              }}>
-                M5
-              </div>
+      <header className="w-full border-b border-white/5 bg-surface-dim/80 backdrop-blur-xl sticky top-0 z-40">
+          <div className="max-w-[1440px] mx-auto px-4 md:px-8 h-[72px] flex items-center justify-between">
               
-              <Link to="/dashboard" style={{ 
-                  color: 'var(--accent-gold)', 
-                  textDecoration: 'none', 
-                  fontWeight: '600', 
-                  fontSize: '0.9rem', 
-                  textTransform: 'uppercase', 
-                  letterSpacing: '0.1em',
-                  transition: 'color 0.2s'
-              }}>
+              <div className="flex items-center gap-6 md:gap-12">
+                  <div className="font-headline-md text-[24px] font-bold text-primary flex items-center gap-2 select-none">
+                    M5
+                  </div>
+                  
+                  <nav className="hidden sm:flex gap-6">
+                      <Link to="/dashboard" className="text-primary font-label-caps text-label-caps tracking-widest uppercase transition-colors">
+                          Sales Forecast
+                      </Link>
+                      <Link to="/dashboard/insights" className="text-on-surface-variant hover:text-primary font-label-caps text-label-caps tracking-widest uppercase transition-colors">
+                          Insights
+                      </Link>
+                  </nav>
+              </div>
+
+              <div className="flex items-center gap-4">
+                  <button 
+                      onClick={handleLogout}
+                      className="text-on-surface-variant hover:text-primary transition-all duration-300 font-label-caps text-[11px] tracking-widest uppercase border border-white/10 px-4 py-2 rounded-lg bg-black/20 hover:bg-black/40 cursor-pointer"
+                  >
+                      Logout
+                  </button>
+              </div>
+          </div>
+          {/* Mobile Nav Link */}
+          <div className="sm:hidden px-4 py-3 border-t border-white/5 bg-surface-dim/95 flex justify-center gap-6">
+              <Link to="/dashboard" className="text-primary font-label-caps text-label-caps tracking-widest uppercase">
                   Sales Forecast
               </Link>
-              
-              <div style={{ flex: 1 }}></div>
-
-              <button 
-                  className="btn-secondary"
-                  onClick={handleLogout}
-                  style={{
-                      width: 'auto',
-                      padding: '8px 20px',
-                      color: 'var(--text-secondary)',
-                      borderColor: 'var(--border-subtle)',
-                      fontSize: '14px'
-                  }}
-              >
-                  Logout
-              </button>
+              <Link to="/dashboard/insights" className="text-on-surface-variant font-label-caps text-label-caps tracking-widest uppercase">
+                  Insights
+              </Link>
           </div>
-      </nav>
+      </header>
 
       {/* Main Content Area */}
-      <main style={{ 
-          flex: 1,
-          width: '100%',
-          maxWidth: '1440px',
-          margin: '0 auto',
-          padding: '0 24px 60px'
-      }}>
+      <main className="flex-grow w-full max-w-[1440px] mx-auto px-4 sm:px-6 md:px-8 py-8 md:py-12 pb-32">
         <Outlet />
       </main>
 
