@@ -1,5 +1,12 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { WS_BASE_URL } from '../config';
+
+declare global {
+  interface Window {
+    SpeechRecognition: any;
+    webkitSpeechRecognition: any;
+  }
+}
 
 export default function VoiceOverlay() {
     const [isRecording, setIsRecording] = useState(false);
@@ -9,6 +16,7 @@ export default function VoiceOverlay() {
     const socketRef = useRef<WebSocket | null>(null);
     const mediaRecorderRef = useRef<MediaRecorder | null>(null);
     const audioContextRef = useRef<AudioContext | null>(null);
+    const recognitionRef = useRef<any>(null);
     
     // Audio Queue for sequential sentence playback
     const audioQueue = useRef<AudioBuffer[]>([]);
@@ -33,8 +41,92 @@ export default function VoiceOverlay() {
         }
     };
 
+    const stopRecording = useCallback(() => {
+        setIsRecording(false);
+        if (mediaRecorderRef.current) {
+            mediaRecorderRef.current.stop();
+            mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
+        }
+        if (socketRef.current) {
+            socketRef.current.close();
+        }
+        
+        // Restart wake word listener after a slight delay
+        setTimeout(() => {
+            try {
+                if (recognitionRef.current) {
+                    recognitionRef.current.start();
+                }
+            } catch (e) {
+                // Ignore if already started
+            }
+        }, 1000);
+    }, []);
+
+    // Set up Wake Word Listener
+    useEffect(() => {
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (SpeechRecognition) {
+            const recognition = new SpeechRecognition();
+            recognition.continuous = true;
+            recognition.interimResults = true;
+            recognition.lang = 'en-US';
+            
+            recognition.onresult = (event: any) => {
+                // If we are already connected to backend, ignore local transcript
+                setIsRecording(prev => {
+                    if (prev) return prev;
+                    
+                    let interimTranscript = '';
+                    for (let i = event.resultIndex; i < event.results.length; ++i) {
+                        interimTranscript += event.results[i][0].transcript;
+                    }
+                    
+                    const text = interimTranscript.toLowerCase();
+                    if (text.includes('hey jade') || text.includes('hey, jade')) {
+                        console.log("🌟 WAKE WORD DETECTED!");
+                        recognition.stop(); // Stop local listening
+                        setIsOpen(true);
+                        // Using a timeout allows state to settle before grabbing mic
+                        setTimeout(() => startRecording(), 100);
+                    }
+                    return prev;
+                });
+            };
+            
+            recognition.onend = () => {
+                // Auto-restart unless we are actively recording to the backend
+                setIsRecording(prev => {
+                    if (!prev && recognitionRef.current) {
+                        try {
+                            recognitionRef.current.start();
+                        } catch(e) {}
+                    }
+                    return prev;
+                });
+            };
+            
+            recognitionRef.current = recognition;
+            
+            try {
+                recognition.start();
+            } catch(e) {}
+        }
+        
+        return () => {
+            if (recognitionRef.current) {
+                recognitionRef.current.stop();
+            }
+        };
+    }, []); 
+
     const startRecording = async () => {
         try {
+            // Stop local recognition if it's running
+            if (recognitionRef.current) {
+                try { recognitionRef.current.stop(); } catch (e) {}
+            }
+
             // 1. Get Microphone
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
             // Initialize AudioContext immediately on user click to avoid auto-play restrictions
@@ -52,11 +144,20 @@ export default function VoiceOverlay() {
             socketRef.current.onopen = () => {
                 console.log("WebSocket connected!");
                 setIsRecording(true);
+                setTranscript([]); // Clear old transcript on fresh start
             };
 
             socketRef.current.onmessage = async (event) => {
                 if (typeof event.data === "string") {
                     const msg = JSON.parse(event.data);
+                    
+                    // Graceful close command from backend
+                    if (msg.type === "close") {
+                        console.log("Backend requested graceful disconnect.");
+                        stopRecording();
+                        return;
+                    }
+                    
                     if (msg.type === "text") {
                         setTranscript((prev) => [...prev, msg.content]);
                     }
@@ -91,17 +192,7 @@ export default function VoiceOverlay() {
         } catch (err) {
             console.error("Error accessing mic or socket:", err);
             alert("Could not start recording. Check console for errors.");
-        }
-    };
-
-    const stopRecording = () => {
-        setIsRecording(false);
-        if (mediaRecorderRef.current) {
-            mediaRecorderRef.current.stop();
-            mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
-        }
-        if (socketRef.current) {
-            socketRef.current.close();
+            stopRecording();
         }
     };
 

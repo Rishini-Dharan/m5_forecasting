@@ -19,7 +19,7 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 openai_client = AsyncOpenAI(api_key=OPENAI_API_KEY)
 deepgram = DeepgramClient(DEEPGRAM_API_KEY)
 
-# Tool schema for prediction
+# Tool schema for prediction and disconnection
 TOOLS = [
     {
         "type": "function",
@@ -51,6 +51,18 @@ TOOLS = [
                     }
                 },
                 "required": ["item_id", "store_id"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "close_connection",
+            "description": "Close the WebSocket connection and hang up the voice call. Use this when the user says 'close the connection', 'hang up', or 'goodbye'.",
+            "parameters": {
+                "type": "object",
+                "properties": {},
+                "required": []
             }
         }
     }
@@ -163,6 +175,12 @@ async def generate_llm_and_tts(transcript: str, websocket: WebSocket, conversati
     await websocket.send_json({"type": "audio_complete"})
 
     # 5. Execute Tool Call if requested
+    if tool_function_name == "close_connection":
+        print("🔧 Tool Call: close_connection")
+        # Tell the frontend to disconnect gracefully
+        await websocket.send_json({"type": "close"})
+        return
+
     if tool_function_name == "predict_sales":
         print(f"🔧 Tool Call: {tool_function_name} with args {tool_arguments}")
         
@@ -235,7 +253,7 @@ async def voice_websocket(websocket: WebSocket):
             "history": [
                 {
                     "role": "system", 
-                    "content": "You are Jade, a helpful, fast, and highly concise AI voice assistant for the M5 Forecasting Engine. Keep answers brief (1-3 sentences) because they are spoken aloud. You have full memory of this conversation. If the user asks for a prediction, use the predict_sales tool. If they don't specify price, weekend, or snap day, just let the tool use its default values rather than asking. You were built by Taasha Trinita alone."
+                    "content": "You are Jade, a helpful, fast, and highly concise AI voice assistant for the M5 Forecasting Engine. Keep answers brief (1-3 sentences) because they are spoken aloud. You have full memory of this conversation. If the user asks for a prediction, use the predict_sales tool. If they don't specify price, weekend, or snap day, just let the tool use its default values rather than asking. If the user asks you to close the connection, hang up, or says goodbye, use the close_connection tool immediately. You were built by Taasha Trinita alone."
                 }
             ]
         }
