@@ -93,8 +93,3 @@ Jade is not just a chatbot—she is integrated directly into the system's predic
 > *"Jade, can you predict the sales for item FOODS_1 in store CA_1?"*
 
 She will autonomously trigger the `predict_sales` tool, compute the numbers using the LightGBM model, and speak the results back to you instantly.
-
----
-
-*Built by Taasha Trinita*
-# m5_forecasting

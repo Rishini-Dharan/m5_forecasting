@@ -1,0 +1,238 @@
+import { useState, useRef } from 'react';
+import { WS_BASE_URL } from '../config';
+
+export default function VoiceOverlay() {
+    const [isRecording, setIsRecording] = useState(false);
+    const [transcript, setTranscript] = useState<string[]>([]);
+    const [isOpen, setIsOpen] = useState(false);
+    
+    const socketRef = useRef<WebSocket | null>(null);
+    const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+    const audioContextRef = useRef<AudioContext | null>(null);
+    
+    // Audio Queue for sequential sentence playback
+    const audioQueue = useRef<AudioBuffer[]>([]);
+    const isPlaying = useRef(false);
+
+    const playNextAudio = () => {
+        if (audioQueue.current.length === 0) {
+            isPlaying.current = false;
+            return;
+        }
+        isPlaying.current = true;
+        const buffer = audioQueue.current.shift()!;
+        
+        if (audioContextRef.current) {
+            const source = audioContextRef.current.createBufferSource();
+            source.buffer = buffer;
+            source.connect(audioContextRef.current.destination);
+            source.onended = () => {
+                playNextAudio();
+            };
+            source.start(0);
+        }
+    };
+
+    const startRecording = async () => {
+        try {
+            // 1. Get Microphone
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            // Initialize AudioContext immediately on user click to avoid auto-play restrictions
+            if (!audioContextRef.current) {
+                audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+            }
+            if (audioContextRef.current.state === 'suspended') {
+                await audioContextRef.current.resume();
+            }
+
+            // 2. Open WebSocket to FastAPI
+            socketRef.current = new WebSocket(`${WS_BASE_URL}/ws/voice`);
+            socketRef.current.binaryType = "arraybuffer";
+            
+            socketRef.current.onopen = () => {
+                console.log("WebSocket connected!");
+                setIsRecording(true);
+            };
+
+            socketRef.current.onmessage = async (event) => {
+                if (typeof event.data === "string") {
+                    const msg = JSON.parse(event.data);
+                    if (msg.type === "text") {
+                        setTranscript((prev) => [...prev, msg.content]);
+                    }
+                } else {
+                    // It's binary audio data (TTS from Deepgram Aura!)
+                    if (audioContextRef.current) {
+                        try {
+                            const buffer = await audioContextRef.current.decodeAudioData(event.data);
+                            audioQueue.current.push(buffer);
+                            if (!isPlaying.current) {
+                                playNextAudio();
+                            }
+                        } catch (err) {
+                            console.error("Error decoding audio data:", err);
+                        }
+                    }
+                }
+            };
+
+            // 3. Record audio and send via WebSocket
+            mediaRecorderRef.current = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+            
+            mediaRecorderRef.current.ondataavailable = (event) => {
+                if (event.data.size > 0 && socketRef.current?.readyState === WebSocket.OPEN) {
+                    socketRef.current.send(event.data);
+                }
+            };
+            
+            // Send audio chunks every 250ms for low latency
+            mediaRecorderRef.current.start(250);
+            
+        } catch (err) {
+            console.error("Error accessing mic or socket:", err);
+            alert("Could not start recording. Check console for errors.");
+        }
+    };
+
+    const stopRecording = () => {
+        setIsRecording(false);
+        if (mediaRecorderRef.current) {
+            mediaRecorderRef.current.stop();
+            mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
+        }
+        if (socketRef.current) {
+            socketRef.current.close();
+        }
+    };
+
+    const handleToggle = () => {
+        if (isRecording) {
+            stopRecording();
+        } else {
+            startRecording();
+        }
+        setIsOpen(!isOpen);
+    };
+
+    return (
+        <div style={{
+            position: 'fixed',
+            bottom: '40px',
+            right: '40px',
+            zIndex: 9999,
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'flex-end',
+            gap: '20px'
+        }}>
+            
+            {/* Transcript Pop-up Panel */}
+            {isOpen && (
+                <div className="glass-panel" style={{
+                    width: '350px',
+                    padding: '24px', 
+                    animation: 'slideUpFade 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards',
+                    transformOrigin: 'bottom right'
+                }}>
+                    <div style={{
+                        display: 'inline-block',
+                        padding: '6px 14px',
+                        borderRadius: '50px',
+                        backgroundColor: 'var(--accent-gold-transparent-light)',
+                        border: '1px solid var(--border-gold)',
+                        color: 'var(--accent-gold)',
+                        fontSize: '11px',
+                        fontWeight: '600',
+                        letterSpacing: '0.1em',
+                        textTransform: 'uppercase',
+                        marginBottom: '16px'
+                    }}>
+                        {isRecording ? "Live Transcript" : "Disconnected"}
+                    </div>
+                    
+                    <div style={{
+                        maxHeight: '250px',
+                        overflowY: 'auto',
+                        paddingRight: '12px' // for scrollbar space
+                    }}>
+                        <p style={{ fontSize: '1rem', color: 'var(--text-primary)', margin: 0, minHeight: '50px' }}>
+                            {transcript.length === 0 && isRecording && (
+                                <span style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>
+                                    I'm listening...
+                                </span>
+                            )}
+                            {transcript.map((text, idx) => (
+                                <span key={idx} style={{ 
+                                    opacity: 0,
+                                    animation: 'fadeInText 0.5s ease forwards',
+                                    marginRight: '6px'
+                                }}>
+                                    {text}
+                                </span>
+                            ))}
+                        </p>
+                    </div>
+                </div>
+            )}
+
+            {/* Floating Action Button */}
+            <button 
+                onClick={handleToggle}
+                onMouseEnter={(e) => {
+                    e.currentTarget.style.transform = 'translateY(-2px) scale(1.05)';
+                }}
+                onMouseLeave={(e) => {
+                    e.currentTarget.style.transform = 'translateY(0) scale(1)';
+                }}
+                style={{
+                    width: '64px',
+                    height: '64px',
+                    borderRadius: '50%',
+                    backgroundColor: isRecording ? '#cc3333' : '#d4af37',
+                    border: 'none',
+                    cursor: 'pointer',
+                    boxShadow: isRecording ? '0 0 30px rgba(204, 51, 51, 0.5)' : '0 10px 25px rgba(212, 175, 55, 0.4)',
+                    transition: 'all 0.3s cubic-bezier(0.16, 1, 0.3, 1)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                }}
+            >
+                {/* Icon inside the button (Microphone) */}
+                {isRecording ? (
+                    <div style={{
+                        width: '20px',
+                        height: '20px',
+                        backgroundColor: '#ffffff',
+                        borderRadius: '4px',
+                        animation: 'pulseSquare 1.5s infinite'
+                    }} />
+                ) : (
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M12 14C13.6569 14 15 12.6569 15 11V5C15 3.34315 13.6569 2 12 2C10.3431 2 9 3.34315 9 5V11C9 12.6569 10.3431 14 12 14Z" fill="#050505"/>
+                        <path d="M19 10V11C19 14.866 15.866 18 12 18C8.13401 18 5 14.866 5 11V10" stroke="#050505" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                        <path d="M12 18V22" stroke="#050505" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                )}
+            </button>
+
+            <style>
+                {`
+                @keyframes fadeInText {
+                    from { opacity: 0; transform: translateY(5px); }
+                    to { opacity: 1; transform: translateY(0); }
+                }
+                @keyframes slideUpFade {
+                    from { opacity: 0; transform: translateY(20px) scale(0.95); }
+                    to { opacity: 1; transform: translateY(0) scale(1); }
+                }
+                @keyframes pulseSquare {
+                    0% { transform: scale(0.95); }
+                    50% { transform: scale(1.1); }
+                    100% { transform: scale(0.95); }
+                }
+                `}
+            </style>
+        </div>
+    );
+}
