@@ -9,7 +9,6 @@ MODEL_PATH = "models/lgb_model.txt"
 model = None
 
 def load_lgb_model():
-    """Loads the model into memory. Called by main.py startup event."""
     global model
     if os.path.exists(MODEL_PATH):
         print("Loading Model...") 
