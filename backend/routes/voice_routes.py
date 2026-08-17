@@ -70,14 +70,8 @@ TOOLS = [
 
 
 async def generate_llm_and_tts(transcript: str, websocket: WebSocket, conversation_history: list):
-    """
-    1. Sends the user's transcript to OpenAI (gpt-4o-mini).
-    2. Streams the text chunks back to the frontend.
-    3. Buffers sentences and streams each sentence to Deepgram TTS concurrently.
-    4. Streams the returned TTS audio bytes to the frontend sequentially.
-    """
     if transcript:
-        print(f"🎙️ User: {transcript}")
+        print(f"User: {transcript}")
     
     # 1. Ask OpenAI
     response = await openai_client.chat.completions.create(
@@ -253,7 +247,7 @@ async def voice_websocket(websocket: WebSocket):
             "history": [
                 {
                     "role": "system", 
-                    "content": "You are Jade, a helpful, fast, and highly concise AI voice assistant for the M5 Forecasting Engine. Keep answers brief (1-3 sentences) because they are spoken aloud. You have full memory of this conversation. If the user asks for a prediction, use the predict_sales tool. If they don't specify price, weekend, or snap day, just let the tool use its default values rather than asking. If the user asks you to close the connection, hang up, or says goodbye, use the close_connection tool immediately. You were built by Taasha Trinita alone."
+                    "content": "You are Jade, a helpful, fast, and highly concise AI voice assistant for the M5 Forecasting Engine. Keep answers brief (1-3 sentences) because they are spoken aloud. You have full memory of this conversation. Always address the user as 'boss'. If the user asks for a prediction, use the predict_sales tool. If they don't specify price, weekend, or snap day, just let the tool use its default values rather than asking. If the user asks you to close the connection, hang up, or says goodbye, use the close_connection tool immediately. You were built by Taasha Trinita alone."
                 }
             ]
         }
