@@ -30,16 +30,10 @@ export default function LandingPage() {
                 </nav>
                 <div className="flex gap-md items-center hidden md:flex">
                     <button 
-                        className="text-on-surface-variant hover:text-primary transition-all duration-300 font-body-sm text-body-sm uppercase tracking-widest cursor-pointer bg-transparent border-none" 
+                        className="bg-primary-container text-on-primary-container px-lg py-xs rounded-full font-label-caps text-label-caps hover:bg-primary transition-colors duration-300 border-none cursor-pointer" 
                         onClick={() => navigate('/login')}
                     >
                         Log In
-                    </button>
-                    <button 
-                        className="bg-primary-container text-on-primary-container px-lg py-xs rounded-full font-label-caps text-label-caps hover:bg-primary transition-colors duration-300 border-none cursor-pointer" 
-                        onClick={() => navigate('/signup')}
-                    >
-                        Sign Up
                     </button>
                 </div>
             </header>
@@ -74,12 +68,6 @@ export default function LandingPage() {
                     <div className="flex flex-col sm:flex-row gap-md items-center justify-center w-full sm:w-auto">
                         <button 
                             className="w-full sm:w-auto bg-[#D4AF37] text-[#050505] px-xl py-sm rounded-lg font-label-caps text-label-caps hover:bg-[#ffe088] transition-all duration-300 shadow-[inset_0_1px_0_rgba(255,255,255,0.3)] border-none cursor-pointer"
-                            onClick={() => navigate('/signup')}
-                        >
-                            Sign Up
-                        </button>
-                        <button 
-                            className="w-full sm:w-auto border border-[rgba(212,175,55,0.15)] text-[#F5F3EE] px-xl py-sm rounded-lg font-label-caps text-label-caps hover:border-[rgba(212,175,55,0.5)] hover:text-primary-container transition-all duration-300 bg-[rgba(20,20,20,0.5)] backdrop-blur-md cursor-pointer"
                             onClick={() => navigate('/login')}
                         >
                             Log In

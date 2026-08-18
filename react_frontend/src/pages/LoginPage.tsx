@@ -32,7 +32,13 @@ export default function LoginPage() {
             if (response.ok) {
                 localStorage.setItem('jwt', data.access_token);
                 localStorage.setItem('user_role', data.role);
-                navigate('/dashboard');
+                localStorage.setItem('store_id', data.store_id || '');
+                
+                if (data.role === 'STORE_OWNER' && data.store_id) {
+                    navigate(`/dashboard/store/${data.store_id}`);
+                } else {
+                    navigate('/dashboard');
+                }
             } else {
                 if (Array.isArray(data.detail)) {
                     setError(data.detail[0].msg || 'Validation Error');
@@ -109,7 +115,7 @@ export default function LoginPage() {
                 </form>
 
                 <p className="text-center mt-8 text-on-surface-variant font-body-sm">
-                    Don't have an account? <Link to="/signup" className="text-primary hover:text-[#ffe088] transition-colors font-semibold">Sign Up</Link>
+                    Access restricted to authorized personnel.
                 </p>
             </div>
         </div>

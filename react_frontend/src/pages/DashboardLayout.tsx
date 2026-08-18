@@ -4,6 +4,7 @@ import VoiceOverlay from '../components/VoiceOverlay';
 
 export default function DashboardLayout() {
   const navigate = useNavigate();
+  const userRole = localStorage.getItem('user_role');
 
   const handleLogout = () => {
       localStorage.removeItem('jwt');
@@ -25,11 +26,16 @@ export default function DashboardLayout() {
                   
                   <nav className="hidden sm:flex gap-6">
                       <Link to="/dashboard" className="text-primary font-label-caps text-label-caps tracking-widest uppercase transition-colors">
-                          Sales Forecast
+                          HQ Map
                       </Link>
                       <Link to="/dashboard/insights" className="text-on-surface-variant hover:text-primary font-label-caps text-label-caps tracking-widest uppercase transition-colors">
                           Insights
                       </Link>
+                      {userRole === 'ADMIN' && (
+                          <Link to="/dashboard/admin" className="text-on-surface-variant hover:text-primary font-label-caps text-label-caps tracking-widest uppercase transition-colors">
+                              Admin Panel
+                          </Link>
+                      )}
                   </nav>
               </div>
 
@@ -45,11 +51,16 @@ export default function DashboardLayout() {
           {/* Mobile Nav Link */}
           <div className="sm:hidden px-4 py-3 border-t border-white/5 bg-surface-dim/95 flex justify-center gap-6">
               <Link to="/dashboard" className="text-primary font-label-caps text-label-caps tracking-widest uppercase">
-                  Sales Forecast
+                  HQ Map
               </Link>
               <Link to="/dashboard/insights" className="text-on-surface-variant font-label-caps text-label-caps tracking-widest uppercase">
                   Insights
               </Link>
+              {userRole === 'ADMIN' && (
+                  <Link to="/dashboard/admin" className="text-on-surface-variant font-label-caps text-label-caps tracking-widest uppercase">
+                      Admin Panel
+                  </Link>
+              )}
           </div>
       </header>
 

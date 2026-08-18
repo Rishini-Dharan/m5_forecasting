@@ -1,23 +1,29 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 from typing import Optional
 from db.db import db
-from utils.auth_utils import encrypt_password, verify_password, create_jwt_token
+from utils.auth_utils import encrypt_password, verify_password, create_jwt_token, get_current_user
 
 router = APIRouter()
 
-class UserSignup(BaseModel):
+class AdminCreateUser(BaseModel):
     email: str
     password: str
-    role: str # e.g., 'ADMIN' or 'STORE_MANAGER'
+    role: str # 'ADMIN' or 'STORE_OWNER'
     store_id: Optional[str] = None
 
 class UserLogin(BaseModel):
     email: str
     password: str
 
-@router.post("/signup")
-def signup(req: UserSignup):
+@router.post("/create-user")
+def create_user(req: AdminCreateUser, current_user: dict = Depends(get_current_user)):
+    if current_user.get("role") != "ADMIN":
+        raise HTTPException(status_code=403, detail="Forbidden. Only Admins can create users.")
+
+    if req.role not in ["ADMIN", "STORE_OWNER"]:
+        raise HTTPException(status_code=400, detail="Invalid role. Must be ADMIN or STORE_OWNER.")
+
     encrypted_pass = encrypt_password(req.password)
     
     sql = "INSERT INTO users (email, password_hash, role, store_id) VALUES (%s, %s, %s, %s) RETURNING id;"
@@ -26,11 +32,11 @@ def signup(req: UserSignup):
     result = db.execute_query(sql, params, fetch=True)
     if result:
         return {"status": "success",
-                "message": "User created!", 
+                "message": f"User {req.email} created as {req.role}!", 
                 "user_id": result[0][0]
             }
     
-    raise HTTPException(status_code=400, detail="Signup failed. Email might already exist.")
+    raise HTTPException(status_code=400, detail="Creation failed. Email might already exist.")
 
 @router.post("/login")
 def login(req: UserLogin):

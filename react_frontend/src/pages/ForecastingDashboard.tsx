@@ -1,11 +1,21 @@
 import React, { useState, useEffect } from 'react';
+import { useParams } from 'react-router-dom';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ReferenceLine } from 'recharts';
 import { API_BASE_URL } from '../config';
 
 export default function ForecastingDashboard() {
+    const { storeId } = useParams<{ storeId: string }>();
+    const userRole = localStorage.getItem('user_role');
+    const assignedStoreId = localStorage.getItem('store_id');
+
+    // If STORE_OWNER, force their assigned store. Otherwise, use URL param or default.
+    const initialStoreId = userRole === 'STORE_OWNER' && assignedStoreId
+        ? assignedStoreId
+        : (storeId || 'CA_1');
+
     const [formData, setFormData] = useState({
         item_id: 'HOBBIES_1_001',
-        store_id: 'CA_1',
+        store_id: initialStoreId,
         price: 8.26,
         is_weekend: 0,
         is_snap_day: 0
@@ -15,13 +25,20 @@ export default function ForecastingDashboard() {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
+    // Sync URL param changes to the form data (useful if navigating between stores)
+    useEffect(() => {
+        if (userRole !== 'STORE_OWNER') {
+            setFormData(prev => ({ ...prev, store_id: storeId || 'CA_1' }));
+        }
+    }, [storeId, userRole]);
+
     // Initial dummy data to show a chart before prediction
     useEffect(() => {
         const initialData = [];
         let actualVol = 50;
-        for(let i=1; i<=30; i++) {
-             actualVol = actualVol + (Math.random() * 20 - 10);
-             initialData.push({ day: `Day -${30-i}`, actual: Math.max(0, Math.round(actualVol)), predicted: null });
+        for (let i = 1; i <= 30; i++) {
+            actualVol = actualVol + (Math.random() * 20 - 10);
+            initialData.push({ day: `Day -${30 - i}`, actual: Math.max(0, Math.round(actualVol)), predicted: null });
         }
         setChartData(initialData);
     }, []);
@@ -60,9 +77,9 @@ export default function ForecastingDashboard() {
             }
 
             const data = await response.json();
-            
+
             let newChartData: any[] = [];
-            
+
             // Fetch Historical Data
             try {
                 const histResponse = await fetch(`${API_BASE_URL}/api/data/historical`, {
@@ -70,7 +87,7 @@ export default function ForecastingDashboard() {
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ item_id: formData.item_id, store_id: formData.store_id })
                 });
-                
+
                 if (histResponse.ok) {
                     const histData = await histResponse.json();
                     newChartData = histData.map((d: any) => ({
@@ -82,15 +99,15 @@ export default function ForecastingDashboard() {
             } catch (e) {
                 console.error("Failed to fetch historical data", e);
             }
-            
+
             if (data.status === 'success') {
                 const predVal = data.predicted_sales;
                 setPrediction(predVal);
-                
+
                 if (newChartData.length > 0) {
                     const lastIdx = newChartData.length - 1;
                     newChartData[lastIdx].predicted = newChartData[lastIdx].actual; // overlap point
-                    
+
                     const lastDayNum = parseInt(newChartData[lastIdx].day.replace('Day ', ''));
                     newChartData.push({
                         day: `Day ${lastDayNum + 1}`,
@@ -99,17 +116,17 @@ export default function ForecastingDashboard() {
                     });
                 } else {
                     // fallback if no history
-                     let actualVol = 50;
-                     for(let i=1; i<=30; i++) {
-                         actualVol = actualVol + (Math.random() * 20 - 10);
-                         newChartData.push({ day: `Day -${30-i}`, actual: Math.max(0, Math.round(actualVol)), predicted: null });
-                     }
-                     newChartData[newChartData.length - 1].predicted = newChartData[newChartData.length - 1].actual;
-                     newChartData.push({
-                         day: `Day +1`,
-                         actual: null,
-                         predicted: predVal
-                     });
+                    let actualVol = 50;
+                    for (let i = 1; i <= 30; i++) {
+                        actualVol = actualVol + (Math.random() * 20 - 10);
+                        newChartData.push({ day: `Day -${30 - i}`, actual: Math.max(0, Math.round(actualVol)), predicted: null });
+                    }
+                    newChartData[newChartData.length - 1].predicted = newChartData[newChartData.length - 1].actual;
+                    newChartData.push({
+                        day: `Day +1`,
+                        actual: null,
+                        predicted: predVal
+                    });
                 }
                 setChartData(newChartData);
             } else {
@@ -149,7 +166,7 @@ export default function ForecastingDashboard() {
 
             {/* Two Column Layout */}
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8 items-start">
-                
+
                 {/* Left Column: Parameters */}
                 <div className="lg:col-span-4 xl:col-span-3 space-y-6">
                     <div className="bg-[#121212] border border-[rgba(255,255,255,0.08)] shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] p-6 rounded-xl h-full flex flex-col">
@@ -157,41 +174,42 @@ export default function ForecastingDashboard() {
                             <span className="material-symbols-outlined text-primary text-[20px]">tune</span>
                             <h2 className="font-label-caps text-[12px] text-on-surface tracking-widest uppercase m-0">Forecast Parameters</h2>
                         </div>
-                        
+
                         <form onSubmit={handlePredict} className="space-y-6 flex-1">
                             <div className="space-y-2">
                                 <label className="font-label-caps text-[12px] uppercase tracking-widest text-secondary block" htmlFor="item_id">Item ID</label>
-                                <input 
-                                    className="bg-transparent border-0 border-b border-white/20 rounded-none text-[#e3e2e2] px-0 py-2 w-full font-mono text-sm transition-all focus:outline-none focus:border-primary focus:shadow-[0_0_4px_rgba(212,175,55,0.5)] focus:pl-2" 
-                                    id="item_id" name="item_id" 
-                                    placeholder="e.g. HOBBIES_1_001" type="text" 
-                                    value={formData.item_id} onChange={handleChange} required 
+                                <input
+                                    className="bg-transparent border-0 border-b border-white/20 rounded-none text-[#e3e2e2] px-0 py-2 w-full font-mono text-sm transition-all focus:outline-none focus:border-primary focus:shadow-[0_0_4px_rgba(212,175,55,0.5)] focus:pl-2"
+                                    id="item_id" name="item_id"
+                                    placeholder="e.g. HOBBIES_1_001" type="text"
+                                    value={formData.item_id} onChange={handleChange} required
                                 />
                             </div>
                             <div className="space-y-2">
                                 <label className="font-label-caps text-[12px] uppercase tracking-widest text-secondary block" htmlFor="store_id">Store ID</label>
-                                <input 
-                                    className="bg-transparent border-0 border-b border-white/20 rounded-none text-[#e3e2e2] px-0 py-2 w-full font-mono text-sm transition-all focus:outline-none focus:border-primary focus:shadow-[0_0_4px_rgba(212,175,55,0.5)] focus:pl-2" 
-                                    id="store_id" name="store_id" 
-                                    placeholder="e.g. CA_1" type="text" 
-                                    value={formData.store_id} onChange={handleChange} required 
+                                <input
+                                    className={`bg-transparent border-0 border-b border-white/20 rounded-none text-[#e3e2e2] px-0 py-2 w-full font-mono text-sm transition-all focus:outline-none focus:border-primary focus:shadow-[0_0_4px_rgba(212,175,55,0.5)] focus:pl-2 ${userRole === 'STORE_OWNER' ? 'opacity-50 cursor-not-allowed bg-black/20' : ''}`}
+                                    id="store_id" name="store_id"
+                                    placeholder="e.g. CA_1" type="text"
+                                    value={formData.store_id} onChange={handleChange} required
+                                    disabled={userRole === 'STORE_OWNER'}
                                 />
                             </div>
                             <div className="space-y-2">
                                 <label className="font-label-caps text-[12px] uppercase tracking-widest text-secondary block" htmlFor="price">Price ($)</label>
-                                <input 
-                                    className="bg-transparent border-0 border-b border-white/20 rounded-none text-[#e3e2e2] px-0 py-2 w-full font-mono text-sm transition-all focus:outline-none focus:border-primary focus:shadow-[0_0_4px_rgba(212,175,55,0.5)] focus:pl-2" 
-                                    id="price" name="price" 
-                                    placeholder="0.00" step="0.01" type="number" 
-                                    value={formData.price} onChange={handleChange} required 
+                                <input
+                                    className="bg-transparent border-0 border-b border-white/20 rounded-none text-[#e3e2e2] px-0 py-2 w-full font-mono text-sm transition-all focus:outline-none focus:border-primary focus:shadow-[0_0_4px_rgba(212,175,55,0.5)] focus:pl-2"
+                                    id="price" name="price"
+                                    placeholder="0.00" step="0.01" type="number"
+                                    value={formData.price} onChange={handleChange} required
                                 />
                             </div>
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="space-y-2">
                                     <label className="font-label-caps text-[12px] uppercase tracking-widest text-secondary block" htmlFor="is_weekend">Weekend</label>
-                                    <select 
-                                        className="bg-transparent border-0 border-b border-white/20 rounded-none text-[#e3e2e2] px-0 py-2 w-full font-mono text-sm appearance-none transition-all focus:outline-none focus:border-primary focus:shadow-[0_0_4px_rgba(212,175,55,0.5)] focus:pl-2" 
-                                        id="is_weekend" name="is_weekend" 
+                                    <select
+                                        className="bg-transparent border-0 border-b border-white/20 rounded-none text-[#e3e2e2] px-0 py-2 w-full font-mono text-sm appearance-none transition-all focus:outline-none focus:border-primary focus:shadow-[0_0_4px_rgba(212,175,55,0.5)] focus:pl-2"
+                                        id="is_weekend" name="is_weekend"
                                         value={formData.is_weekend} onChange={handleChange}
                                     >
                                         <option value={0} className="bg-[#1a1c1c]">0 (No)</option>
@@ -200,9 +218,9 @@ export default function ForecastingDashboard() {
                                 </div>
                                 <div className="space-y-2">
                                     <label className="font-label-caps text-[12px] uppercase tracking-widest text-secondary block" htmlFor="is_snap_day">SNAP Day</label>
-                                    <select 
-                                        className="bg-transparent border-0 border-b border-white/20 rounded-none text-[#e3e2e2] px-0 py-2 w-full font-mono text-sm appearance-none transition-all focus:outline-none focus:border-primary focus:shadow-[0_0_4px_rgba(212,175,55,0.5)] focus:pl-2" 
-                                        id="is_snap_day" name="is_snap_day" 
+                                    <select
+                                        className="bg-transparent border-0 border-b border-white/20 rounded-none text-[#e3e2e2] px-0 py-2 w-full font-mono text-sm appearance-none transition-all focus:outline-none focus:border-primary focus:shadow-[0_0_4px_rgba(212,175,55,0.5)] focus:pl-2"
+                                        id="is_snap_day" name="is_snap_day"
                                         value={formData.is_snap_day} onChange={handleChange}
                                     >
                                         <option value={0} className="bg-[#1a1c1c]">0 (No)</option>
@@ -218,7 +236,7 @@ export default function ForecastingDashboard() {
                             )}
 
                             <div className="pt-6 mt-6 border-t border-white/10">
-                                <button 
+                                <button
                                     type="submit" disabled={loading}
                                     className="w-full bg-primary-container text-[#050505] font-label-caps text-[12px] uppercase tracking-widest py-3 px-6 rounded hover:bg-primary transition-colors flex items-center justify-center gap-3 cursor-pointer disabled:opacity-50"
                                 >
@@ -234,13 +252,13 @@ export default function ForecastingDashboard() {
 
                 {/* Right Column: Visualization */}
                 <div className="lg:col-span-8 xl:col-span-9 space-y-6 flex flex-col min-w-0">
-                    
+
                     {/* KPI Cards Row */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="bg-[#121212] border border-[rgba(255,255,255,0.08)] shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] p-6 rounded-xl relative overflow-hidden group">
                             {/* Subtle background accent */}
                             <div className="absolute -right-12 -top-12 w-32 h-32 bg-primary/5 rounded-full blur-2xl group-hover:bg-primary/10 transition-all duration-700 pointer-events-none"></div>
-                            
+
                             <h3 className="font-label-caps text-[12px] uppercase tracking-widest text-secondary mb-2 m-0">Predicted Target Sales</h3>
                             <div className="flex items-baseline gap-3">
                                 <span className="font-headline-xl text-4xl text-primary m-0 tracking-tight">
@@ -253,10 +271,10 @@ export default function ForecastingDashboard() {
                                 Model Confidence: {prediction !== null ? '94%' : '--'}
                             </div>
                         </div>
-                        
+
                         <div className="bg-[#121212] p-6 rounded-xl flex items-center justify-center opacity-50 border-dashed border-white/20">
                             <p className="font-label-caps text-[12px] uppercase tracking-widest text-secondary text-center m-0">
-                                Additional metrics available post-generation
+
                             </p>
                         </div>
                     </div>
@@ -279,9 +297,9 @@ export default function ForecastingDashboard() {
                                 </div>
                             </div>
                         </div>
-                        
+
                         <div className="flex-1 w-full h-full relative border border-white/5 rounded-xl overflow-hidden bg-[#0A0A0A]">
-                            
+
                             {/* Loading Overlay */}
                             {loading && (
                                 <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#121414]/70 backdrop-blur-sm z-10">
@@ -295,43 +313,43 @@ export default function ForecastingDashboard() {
                                 <ResponsiveContainer width="100%" height="100%">
                                     <LineChart data={chartData} margin={{ top: 20, right: 20, left: -20, bottom: 0 }}>
                                         <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
-                                        <XAxis 
-                                            dataKey="day" 
-                                            stroke="#757575" 
-                                            tick={{fill: '#757575', fontSize: 10, fontFamily: 'monospace'}} 
+                                        <XAxis
+                                            dataKey="day"
+                                            stroke="#757575"
+                                            tick={{ fill: '#757575', fontSize: 10, fontFamily: 'monospace' }}
                                             tickLine={false}
                                             axisLine={false}
                                             minTickGap={30}
                                         />
-                                        <YAxis 
-                                            stroke="#757575" 
-                                            tick={{fill: '#757575', fontSize: 10, fontFamily: 'monospace'}}
+                                        <YAxis
+                                            stroke="#757575"
+                                            tick={{ fill: '#757575', fontSize: 10, fontFamily: 'monospace' }}
                                             tickLine={false}
                                             axisLine={false}
                                         />
                                         <Tooltip content={<CustomTooltip />} cursor={{ stroke: 'rgba(212,175,55,0.2)', strokeWidth: 2 }} />
-                                        
+
                                         {/* Show reference line if prediction exists */}
-                                        {prediction !== null && <ReferenceLine x={chartData[chartData.length-1]?.day} stroke="rgba(255,255,255,0.2)" strokeDasharray="3 3" />}
-                                        
-                                        <Line 
-                                            type="monotone" 
-                                            dataKey="actual" 
+                                        {prediction !== null && <ReferenceLine x={chartData[chartData.length - 1]?.day} stroke="rgba(255,255,255,0.2)" strokeDasharray="3 3" />}
+
+                                        <Line
+                                            type="monotone"
+                                            dataKey="actual"
                                             name="Actual"
-                                            stroke="#e3e2e2" 
+                                            stroke="#e3e2e2"
                                             strokeWidth={1.5}
                                             dot={false}
                                             activeDot={{ r: 4, fill: '#121212', stroke: '#e3e2e2', strokeWidth: 2 }}
                                         />
-                                        <Line 
-                                            type="monotone" 
-                                            dataKey="predicted" 
+                                        <Line
+                                            type="monotone"
+                                            dataKey="predicted"
                                             name="Predicted"
-                                            stroke="#d4af37" 
+                                            stroke="#d4af37"
                                             strokeWidth={2}
                                             dot={false}
                                             activeDot={{ r: 4, fill: '#121212', stroke: '#d4af37', strokeWidth: 2 }}
-                                            strokeDasharray="5 5" 
+                                            strokeDasharray="5 5"
                                         />
                                     </LineChart>
                                 </ResponsiveContainer>
