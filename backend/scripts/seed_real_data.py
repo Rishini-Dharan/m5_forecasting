@@ -50,9 +50,16 @@ def seed_real_data():
     cursor = conn.cursor()
     
     insert_query = "INSERT INTO historical_sales (item_id, store_id, day_index, sales) VALUES %s"
-    psycopg2.extras.execute_values(cursor, insert_query, data_tuples, page_size=10000)
     
-    conn.commit()
+    chunk_size = 5000
+    total = len(data_tuples)
+    for i in range(0, total, chunk_size):
+        chunk = data_tuples[i:i + chunk_size]
+        psycopg2.extras.execute_values(cursor, insert_query, chunk, page_size=1000)
+        conn.commit()
+        if (i + chunk_size) % 100000 == 0:
+            print(f"Inserted {i + chunk_size} / {total}")
+            
     cursor.close()
     conn.close()
     

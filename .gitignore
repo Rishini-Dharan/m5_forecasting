@@ -61,3 +61,5 @@ m5-forecasting-accuracy/
 frontend/
 examplesjava/
 .agents/
+
+prophet_models/

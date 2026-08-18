@@ -38,7 +38,6 @@ def get_global_insights():
     Because we only loaded 30 days of data (d_1912 to d_1941), we calculate growth 
     by comparing the first 15 days to the last 15 days.
     """
-    # 1. Get Trajectory Data (Total sales per day for the 30 day period)
     trajectory_query = """
         SELECT day_index, SUM(sales) as daily_total 
         FROM historical_sales 
@@ -48,7 +47,6 @@ def get_global_insights():
     traj_results = db.execute_query(trajectory_query, fetch=True)
     
     if not traj_results or len(traj_results) == 0:
-        # Fallback if DB is still seeding or empty
         return _fallback_mock_data()
 
     trajectory_data = []
@@ -88,7 +86,6 @@ def get_global_insights():
     else:
         confidence = 0.0
 
-    # 4. Anomalies Detected (Days outside 1.5 standard deviations)
     anomaly_count = 0
     for val in daily_totals:
         if val > mean_sales + (1.5 * std_sales) or val < mean_sales - (1.5 * std_sales):

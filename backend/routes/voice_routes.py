@@ -15,11 +15,9 @@ router = APIRouter()
 DEEPGRAM_API_KEY = os.getenv("DEEPGRAM_API_KEY")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
-# Initialize Clients
 openai_client = AsyncOpenAI(api_key=OPENAI_API_KEY)
 deepgram = DeepgramClient(DEEPGRAM_API_KEY)
 
-# Tool schema for prediction and disconnection
 TOOLS = [
     {
         "type": "function",
@@ -117,11 +115,9 @@ async def generate_llm_and_tts(transcript: str, websocket: WebSocket, conversati
     tool_function_name = None
     tool_arguments = ""
     
-    # 3. Receive text tokens and stream them to the frontend
     async for chunk in response:
         delta = chunk.choices[0].delta
         
-        # Handle Tool Calls
         if delta.tool_calls:
             tc = delta.tool_calls[0]
             if tc.id:
@@ -247,7 +243,7 @@ async def voice_websocket(websocket: WebSocket):
             "history": [
                 {
                     "role": "system", 
-                    "content": "You are Jade, a helpful, fast, and highly concise AI voice assistant for the M5 Forecasting Engine. Keep answers brief (1-3 sentences) because they are spoken aloud. You have full memory of this conversation. Always address the user as 'boss'. If the user asks for a prediction, use the predict_sales tool. If they don't specify price, weekend, or snap day, just let the tool use its default values rather than asking. If the user asks you to close the connection, hang up, or says goodbye, use the close_connection tool immediately. You were built by Taasha Trinita alone."
+                    "content": "You are Jade, a helpful, fast, and highly concise AI voice assistant for the M5 Forecasting Engine. Keep answers brief (1-3 sentences) because they are spoken aloud. You have full memory of this conversation. Always address the user as 'boss'. If the user asks for a prediction, use the predict_sales tool. If they don't specify price, weekend, or snap day, just let the tool use its default values rather than asking. If the user asks you to close the connection, hang up, or says goodbye, use the close_connection tool immediately. You were built by Taasha Trinita."
                 }
             ]
         }
