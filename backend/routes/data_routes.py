@@ -1,67 +1,165 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
-from db.db import db
 from typing import List
+from db.db import db
+from utils.auth_utils import get_current_user
 import statistics
+import logging
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 class HistoricalDataRequest(BaseModel):
     item_id: str
     store_id: str
+    days: int = 30
 
 class DataPoint(BaseModel):
     day: int
     sales: int
 
-@router.post("/historical", response_model=List[DataPoint])
-def get_historical_data(req: HistoricalDataRequest):
+class HistoricalResponse(BaseModel):
+    item_id: str
+    store_id: str
+    data: List[DataPoint]
+
+class StoreInfo(BaseModel):
+    store_id: str
+    total_records: int
+    total_sales: float
+    avg_daily_sales: float
+    items: List[str]
+
+@router.post("/historical", response_model=HistoricalResponse)
+def get_historical_data(req: HistoricalDataRequest, current_user: dict = Depends(get_current_user)):
+    """Get historical sales data for an item at a store."""
+    if current_user.get("role") == "STORE_OWNER":
+        user_store = current_user.get("store_id")
+        if user_store and req.store_id != user_store:
+            raise HTTPException(status_code=403, detail="Access denied: You can only view data for your assigned store")
+    
     query = """
         SELECT day_index, sales 
         FROM historical_sales 
         WHERE item_id = %s AND store_id = %s 
-        ORDER BY day_index ASC
+        ORDER BY day_index DESC
+        LIMIT %s
     """
     
-    results = db.execute_query(query, (req.item_id, req.store_id), fetch=True)
+    results = db.execute_query(query, (req.item_id, req.store_id, req.days), fetch=True)
     
     if not results:
-        return []
-        
-    return [{"day": row[0], "sales": row[1]} for row in results]
+        return HistoricalResponse(item_id=req.item_id, store_id=req.store_id, data=[])
+    
+    # Reverse to get chronological order
+    data = [{"day": row["day_index"], "sales": row["sales"]} for row in reversed(results)]
+    
+    return HistoricalResponse(
+        item_id=req.item_id,
+        store_id=req.store_id,
+        data=data
+    )
 
+@router.get("/stores")
+def get_stores(current_user: dict = Depends(get_current_user)):
+    """Get list of all stores from the database."""
+    try:
+        query = """
+            SELECT DISTINCT store_id 
+            FROM historical_sales 
+            ORDER BY store_id
+        """
+        results = db.execute_query(query, fetch=True)
+        stores = list(set(r["store_id"] for r in results)) if results else []
+        return {"stores": stores}
+    except Exception as e:
+        logger.error(f"Error fetching stores: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/store/{store_id}")
+def get_store_details(store_id: str, current_user: dict = Depends(get_current_user)):
+    """Get details for a specific store including items and metrics."""
+    try:
+        items_query = """
+            SELECT DISTINCT item_id 
+            FROM historical_sales 
+            WHERE store_id = %s
+            ORDER BY item_id
+        """
+        items_results = db.execute_query(items_query, (store_id,), fetch=True)
+        items = list(set(r["item_id"] for r in items_results)) if items_results else []
+        
+        summary_query = """
+            SELECT 
+                COUNT(*) as total_records,
+                SUM(sales) as total_sales,
+                AVG(sales) as avg_sales,
+                MAX(day_index) as max_day,
+                MIN(day_index) as min_day
+            FROM historical_sales 
+            WHERE store_id = %s
+        """
+        summary = db.execute_query(summary_query, (store_id,), fetch_one=True)
+        
+        if summary:
+            return {
+                "store_id": store_id,
+                "items": items,
+                "total_records": summary["total_records"],
+                "total_sales": float(summary["total_sales"] or 0),
+                "avg_daily_sales": float(summary["avg_sales"] or 0),
+                "day_range": {
+                    "min": summary["min_day"],
+                    "max": summary["max_day"]
+                }
+            }
+        else:
+            return {
+                "store_id": store_id,
+                "items": items,
+                "total_records": 0,
+                "total_sales": 0,
+                "avg_daily_sales": 0,
+                "day_range": {"min": 0, "max": 0}
+            }
+    except Exception as e:
+        logger.error(f"Error fetching store details: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/insights")
-def get_global_insights():
-    """
-    Returns true global insight metrics calculated from the historical_sales database.
-    Because we only loaded 30 days of data (d_1912 to d_1941), we calculate growth 
-    by comparing the first 15 days to the last 15 days.
-    """
-    trajectory_query = """
+def get_global_insights(current_user: dict = Depends(get_current_user)):
+    """Returns global insight metrics calculated from the historical_sales database."""
+    store_filter = ""
+    params = []
+    if current_user.get("role") == "STORE_OWNER":
+        user_store = current_user.get("store_id")
+        if user_store:
+            store_filter = "WHERE store_id = %s"
+            params = [user_store]
+    
+    trajectory_query = f"""
         SELECT day_index, SUM(sales) as daily_total 
         FROM historical_sales 
+        {store_filter}
         GROUP BY day_index 
         ORDER BY day_index ASC
     """
-    traj_results = db.execute_query(trajectory_query, fetch=True)
+    traj_results = db.execute_query(trajectory_query, params if params else None, fetch=True)
     
-    if not traj_results or len(traj_results) == 0:
+    if not traj_results:
         return _fallback_mock_data()
-
+    
     trajectory_data = []
     daily_totals = []
     for idx, row in enumerate(traj_results):
-        trajectory_data.append({"day": idx, "value": float(row[1])})
-        daily_totals.append(float(row[1]))
-
-    # Split into first half and second half for growth metrics
+        trajectory_data.append({"day": idx, "value": float(row["daily_total"])})
+        daily_totals.append(float(row["daily_total"]))
+    
     half_point = len(daily_totals) // 2
     first_half_sum = sum(daily_totals[:half_point])
     second_half_sum = sum(daily_totals[half_point:])
     total_30_days = sum(daily_totals)
 
-    # 2. Revenue & Growth Calculation
     if first_half_sum > 0:
         growth_pct = ((second_half_sum - first_half_sum) / first_half_sum) * 100
     else:
@@ -70,13 +168,11 @@ def get_global_insights():
     growth_str = f"+{growth_pct:.1f}%" if growth_pct >= 0 else f"{growth_pct:.1f}%"
     trend = "up" if growth_pct >= 0 else "down"
 
-    # Format Revenue Value (e.g., millions or thousands)
     if total_30_days >= 1_000_000:
         rev_value = f"${total_30_days / 1_000_000:.1f}M"
     else:
         rev_value = f"${total_30_days / 1000:.1f}K"
 
-    # 3. Confidence Interval (Inverse of Relative Standard Deviation)
     mean_sales = statistics.mean(daily_totals) if daily_totals else 0
     std_sales = statistics.stdev(daily_totals) if len(daily_totals) > 1 else 0
     
@@ -93,14 +189,14 @@ def get_global_insights():
             
     anomaly_status = "Review Required" if anomaly_count > 0 else "Normal Stability"
 
-    # 5. Key Drivers (Top 3 items in the last 15 days and their growth vs first 15 days)
-    drivers_query = """
+    drivers_query = f"""
         WITH ItemHalves AS (
             SELECT 
                 item_id,
-                SUM(CASE WHEN day_index < 1927 THEN sales ELSE 0 END) as first_half,
-                SUM(CASE WHEN day_index >= 1927 THEN sales ELSE 0 END) as second_half
+                SUM(CASE WHEN day_index < (SELECT MIN(day_index) + (MAX(day_index) - MIN(day_index))/2 FROM historical_sales {store_filter}) THEN sales ELSE 0 END) as first_half,
+                SUM(CASE WHEN day_index >= (SELECT MIN(day_index) + (MAX(day_index) - MIN(day_index))/2 FROM historical_sales {store_filter}) THEN sales ELSE 0 END) as second_half
             FROM historical_sales
+            {store_filter}
             GROUP BY item_id
         )
         SELECT 
@@ -112,14 +208,14 @@ def get_global_insights():
         ORDER BY total DESC
         LIMIT 3
     """
-    drivers_results = db.execute_query(drivers_query, fetch=True)
+    drivers_results = db.execute_query(drivers_query, params * 3 if params else None, fetch=True)
     
     key_drivers = []
     top_driver_name = "Unknown"
     for row in drivers_results:
-        item = row[0]
-        first_h = row[1]
-        second_h = row[2]
+        item = row["item_id"]
+        first_h = row["first_half"]
+        second_h = row["second_half"]
         
         if top_driver_name == "Unknown":
             top_driver_name = item
@@ -132,7 +228,6 @@ def get_global_insights():
         d_trend = "up" if d_growth >= 0 else "down"
         d_growth_str = f"+{d_growth:.1f}%" if d_growth >= 0 else f"{d_growth:.1f}%"
         
-        # Clean item name e.g., HOBBIES_1_001 -> Hobbies 1 001
         clean_name = item.replace("_", " ").title()
         
         key_drivers.append({
@@ -141,7 +236,6 @@ def get_global_insights():
             "trend": d_trend
         })
 
-    # 6. Dynamic Jade Insight
     jade_insight = f"The recent surge in '{top_driver_name}' strongly correlates with overall network growth. Recommending a capacity review for this item family in Q4."
 
     return {
@@ -185,7 +279,7 @@ def _fallback_mock_data():
         "trajectory_data": trajectory_data,
         "key_drivers": [
             { "name": "Enterprise Licensing", "change": "+8.2%", "trend": "up" },
-            { "name": "API Usage", "change": "+15.4%", "trend": "up" },
+            { "name": "Api Usage", "change": "+15.4%", "trend": "up" },
             { "name": "Professional Services", "change": "-2.1%", "trend": "down" }
         ],
         "jade_insight": "The recent surge in API usage strongly correlates with the rollout of v2.0. Recommending a capacity review for Q4."

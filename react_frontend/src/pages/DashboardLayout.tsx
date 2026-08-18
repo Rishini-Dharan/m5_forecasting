@@ -1,6 +1,4 @@
-
 import { Link, Outlet, useNavigate } from 'react-router-dom';
-import VoiceOverlay from '../components/VoiceOverlay';
 
 export default function DashboardLayout() {
   const navigate = useNavigate();
@@ -9,6 +7,7 @@ export default function DashboardLayout() {
   const handleLogout = () => {
       localStorage.removeItem('jwt');
       localStorage.removeItem('user_role');
+      localStorage.removeItem('store_id');
       navigate('/');
   };
 
@@ -68,9 +67,6 @@ export default function DashboardLayout() {
       <main className="flex-grow w-full max-w-[1440px] mx-auto px-4 sm:px-6 md:px-8 py-8 md:py-12 pb-32">
         <Outlet />
       </main>
-
-      {/* Universal Floating Voice Assistant */}
-      <VoiceOverlay />
     </div>
   );
 }

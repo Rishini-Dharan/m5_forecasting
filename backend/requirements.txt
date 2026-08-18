@@ -6,8 +6,8 @@ python-dotenv
 psycopg2-binary
 pyjwt
 cryptography
-deepgram-sdk==3.4.0
-openai
 passlib[bcrypt]
-websockets<14.0
 pandas
+numpy
+huggingface-hub
+psycopg2-pool

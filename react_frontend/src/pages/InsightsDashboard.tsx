@@ -1,20 +1,50 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, BarChart, Bar, Cell, ResponsiveContainer as RC } from 'recharts';
 import { Link } from 'react-router-dom';
-import { API_BASE_URL } from '../config';
+import { ENDPOINTS } from '../config';
+
+interface InsightData {
+  projected_revenue: {
+    value: string;
+    growth: string;
+    trend: string;
+  };
+  confidence_interval: {
+    value: string;
+    status: string;
+  };
+  anomalies: {
+    count: number;
+    status: string;
+  };
+  trajectory_data: Array<{ day: number; value: number }>;
+  key_drivers: Array<{
+    name: string;
+    change: string;
+    trend: string;
+  }>;
+  jade_insight: string;
+}
+
+const COLORS = ['#D4AF37', '#3b82f6', '#10b981', '#ef4444', '#8b5cf6'];
 
 export default function InsightsDashboard() {
-    const [data, setData] = useState<any>(null);
+    const [data, setData] = useState<InsightData | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
         const fetchInsights = async () => {
             try {
-                const response = await fetch(`${API_BASE_URL}/api/data/insights`);
+                const response = await fetch(ENDPOINTS.data.insights, {
+                    headers: {
+                        'Authorization': `Bearer ${localStorage.getItem('jwt') || ''}`
+                    }
+                });
                 if (!response.ok) {
                     throw new Error('Failed to fetch insights data');
                 }
-                const jsonData = await response.json();
+                const jsonData: InsightData = await response.json();
                 setData(jsonData);
             } catch (err: any) {
                 setError(err.message || 'An error occurred while loading insights.');
@@ -25,6 +55,23 @@ export default function InsightsDashboard() {
 
         fetchInsights();
     }, []);
+
+    const CustomTooltip = ({ active, payload, label }: any) => {
+        if (active && payload && payload.length) {
+            return (
+                <div className="bg-[#1a1c1c] border border-white/10 p-3 rounded shadow-lg backdrop-blur-md font-mono text-[12px]">
+                    <p className="text-secondary mb-2 border-b border-white/10 pb-1">Day {label}</p>
+                    {payload.map((entry: any, index: number) => (
+                        <p key={`item-${index}`} style={{ color: entry.color }} className="flex justify-between gap-4 py-0.5 m-0">
+                            <span>{entry.name}:</span>
+                            <span>{Number(entry.value).toFixed(0)}</span>
+                        </p>
+                    ))}
+                </div>
+            );
+        }
+        return null;
+    };
 
     if (loading) {
         return (
@@ -57,13 +104,16 @@ export default function InsightsDashboard() {
                     </h1>
                 </div>
                 <div className="flex gap-4">
-                    <button className="bg-transparent border border-white/20 text-on-surface px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-white/5 transition-colors font-label-caps text-[11px] uppercase tracking-widest cursor-pointer">
+                    <button 
+                        onClick={() => window.print()}
+                        className="bg-transparent border border-white/20 text-on-surface px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-white/5 transition-colors font-label-caps text-[11px] uppercase tracking-widest cursor-pointer"
+                    >
                         <span className="material-symbols-outlined text-[18px]">download</span>
                         Export
                     </button>
-                    <Link to="/dashboard" className="bg-primary-container text-[#050505] px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-[#ffe088] transition-colors font-label-caps text-[11px] uppercase tracking-widest cursor-pointer no-underline shadow-[inset_0_1px_0_rgba(255,255,255,0.3)]">
+                    <Link to="/dashboard/store/CA_1" className="bg-primary-container text-[#050505] px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-[#ffe088] transition-colors font-label-caps text-[11px] uppercase tracking-widest cursor-pointer no-underline shadow-[inset_0_1px_0_rgba(255,255,255,0.3)]">
                         <span className="material-symbols-outlined text-[18px]">add</span>
-                        New Model
+                        New Forecast
                     </Link>
                 </div>
             </header>
@@ -73,14 +123,21 @@ export default function InsightsDashboard() {
                 {/* Key Metric 1 */}
                 <div className="col-span-1 md:col-span-6 bg-surface-dim/70 backdrop-blur-xl border border-[rgba(212,175,55,0.15)] p-6 md:p-8 rounded-2xl flex flex-col justify-between min-h-[160px] shadow-[0_8px_32px_rgba(0,0,0,0.4)] relative overflow-hidden group">
                     <div className="flex justify-between items-start z-10 relative">
-                        <h3 className="font-body-sm text-on-surface-variant m-0">Projected Revenue (Q3)</h3>
-                        <span className="material-symbols-outlined text-primary">{data.projected_revenue.trend === 'up' ? 'trending_up' : 'trending_down'}</span>
+                        <h3 className="font-body-sm text-on-surface-variant m-0">Projected Revenue</h3>
+                        <span className="material-symbols-outlined text-primary">
+                            {data.projected_revenue.trend === 'up' ? 'trending_up' : 'trending_down'}
+                        </span>
                     </div>
                     <div className="z-10 relative mt-8">
-                        <p className="font-headline-xl text-4xl text-on-surface m-0 tracking-tight">{data.projected_revenue.value}</p>
-                        <p className={`font-label-caps text-[11px] mt-2 m-0 uppercase tracking-widest ${data.projected_revenue.trend === 'up' ? 'text-[#4ade80]' : 'text-error'}`}>{data.projected_revenue.growth} vs Q2</p>
+                        <p className="font-headline-xl text-4xl text-on-surface m-0 tracking-tight">
+                            {data.projected_revenue.value}
+                        </p>
+                        <p className={`font-label-caps text-[11px] mt-2 m-0 uppercase tracking-widest ${
+                            data.projected_revenue.trend === 'up' ? 'text-[#4ade80]' : 'text-error'
+                        }`}>
+                            {data.projected_revenue.growth} vs previous period
+                        </p>
                     </div>
-                    {/* Glow effect */}
                     <div className="absolute -right-12 -top-12 w-32 h-32 bg-primary-container/10 rounded-full blur-2xl group-hover:bg-primary-container/20 transition-all duration-700 pointer-events-none"></div>
                 </div>
 
@@ -91,59 +148,88 @@ export default function InsightsDashboard() {
                         <span className="material-symbols-outlined text-on-surface-variant">analytics</span>
                     </div>
                     <div className="mt-8">
-                        <p className="font-headline-xl text-4xl text-on-surface m-0 tracking-tight">{data.confidence_interval.value}</p>
-                        <p className="font-label-caps text-[11px] text-on-surface-variant mt-2 m-0 uppercase tracking-widest">{data.confidence_interval.status}</p>
+                        <p className="font-headline-xl text-4xl text-on-surface m-0 tracking-tight">
+                            {data.confidence_interval.value}
+                        </p>
+                        <p className="font-label-caps text-[11px] text-on-surface-variant mt-2 m-0 uppercase tracking-widest">
+                            {data.confidence_interval.status}
+                        </p>
                     </div>
                 </div>
 
-                {/* Main Chart Area */}
+                {/* Anomalies Card */}
+                <div className="col-span-1 md:col-span-4 bg-surface-dim/70 backdrop-blur-xl border border-[rgba(212,175,55,0.15)] p-6 md:p-8 rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.4)]">
+                    <div className="flex justify-between items-start mb-4">
+                        <h3 className="font-body-sm text-on-surface-variant m-0">Anomaly Detection</h3>
+                        <span className="material-symbols-outlined text-error">
+                            {data.anomalies.count > 0 ? 'warning' : 'check_circle'}
+                        </span>
+                    </div>
+                    <p className="font-headline-xl text-3xl text-on-surface m-0">
+                        {data.anomalies.count} {data.anomalies.count === 1 ? 'anomaly' : 'anomalies'}
+                    </p>
+                    <p className={`font-label-caps text-[10px] mt-2 m-0 uppercase tracking-widest ${
+                        data.anomalies.count > 0 ? 'text-error' : 'text-[#4ade80]'
+                    }`}>
+                        {data.anomalies.status}
+                    </p>
+                </div>
+
+                {/* Main Chart Area - Real Recharts */}
                 <div className="col-span-1 md:col-span-8 bg-surface-dim/70 backdrop-blur-xl border border-[rgba(212,175,55,0.15)] p-6 md:p-8 rounded-2xl min-h-[400px] flex flex-col shadow-[0_8px_32px_rgba(0,0,0,0.4)]">
                     <div className="flex justify-between items-center mb-6">
-                        <h2 className="font-headline-md text-xl text-on-surface m-0">Revenue Trajectory</h2>
-                        <div className="flex gap-4">
-                            <button className="font-label-caps text-[11px] text-primary border-b border-primary pb-1 uppercase tracking-widest bg-transparent cursor-pointer">1M</button>
-                            <button className="font-label-caps text-[11px] text-on-surface-variant border-b border-transparent hover:text-on-surface hover:border-white/20 pb-1 uppercase tracking-widest bg-transparent transition-all cursor-pointer">3M</button>
-                            <button className="font-label-caps text-[11px] text-on-surface-variant border-b border-transparent hover:text-on-surface hover:border-white/20 pb-1 uppercase tracking-widest bg-transparent transition-all cursor-pointer">YTD</button>
-                        </div>
+                        <h2 className="font-headline-md text-xl text-on-surface m-0 flex items-center gap-2">
+                            <span className="material-symbols-outlined text-secondary">monitoring</span>
+                            Revenue Trajectory
+                        </h2>
                     </div>
-                    <div className="flex-grow flex items-center justify-center relative border border-white/5 rounded-xl overflow-hidden bg-black/50">
-                        {/* Placeholder for Chart */}
-                        <div className="absolute inset-0 opacity-20 pointer-events-none" style={{ backgroundImage: 'radial-gradient(circle at center, rgba(212, 175, 55, 0.1) 0%, transparent 70%)' }}></div>
-                        
-                        {/* SVG Chart Abstract Representation */}
-                        <svg className="w-full h-full min-h-[300px]" preserveAspectRatio="none" viewBox="0 0 800 300">
-                            {/* Grid Lines */}
-                            <line stroke="rgba(255,255,255,0.05)" strokeWidth="1" x1="0" x2="800" y1="250" y2="250"></line>
-                            <line stroke="rgba(255,255,255,0.05)" strokeWidth="1" x1="0" x2="800" y1="150" y2="150"></line>
-                            <line stroke="rgba(255,255,255,0.05)" strokeWidth="1" x1="0" x2="800" y1="50" y2="50"></line>
-                            
-                            {/* Data Line */}
-                            <path d="M0,280 C100,260 200,200 300,180 C400,160 500,210 600,100 C700,-10 800,40 800,40" fill="none" stroke="#D4AF37" strokeWidth="2"></path>
-                            
-                            {/* Forecast Area (Dashed) */}
-                            <path d="M600,100 C700,-10 800,40 800,40" fill="none" stroke="#D4AF37" strokeDasharray="5,5" strokeWidth="2"></path>
-                            
-                            {/* Gradient Fill */}
-                            <path d="M0,280 C100,260 200,200 300,180 C400,160 500,210 600,100 C700,-10 800,40 800,40 L800,300 L0,300 Z" fill="url(#chartGradient)" opacity="0.1"></path>
-                            
-                            <defs>
-                                <linearGradient id="chartGradient" x1="0" x2="0" y1="0" y2="1">
-                                    <stop offset="0%" stopColor="#D4AF37"></stop>
-                                    <stop offset="100%" stopColor="#050505"></stop>
-                                </linearGradient>
-                            </defs>
-                        </svg>
+                    <div className="flex-grow h-64">
+                        <ResponsiveContainer width="100%" height="100%">
+                            <LineChart data={data.trajectory_data}>
+                                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
+                                <XAxis
+                                    dataKey="day"
+                                    stroke="#757575"
+                                    tick={{ fill: '#757575', fontSize: 11, fontFamily: 'monospace' }}
+                                    tickLine={false}
+                                    axisLine={false}
+                                    tickFormatter={(value) => `D${value}`}
+                                />
+                                <YAxis
+                                    stroke="#757575"
+                                    tick={{ fill: '#757575', fontSize: 11, fontFamily: 'monospace' }}
+                                    tickLine={false}
+                                    axisLine={false}
+                                />
+                                <Tooltip content={<CustomTooltip />} cursor={{ stroke: 'rgba(212,175,55,0.2)', strokeWidth: 2 }} />
+                                <Line
+                                    type="monotone"
+                                    dataKey="value"
+                                    name="Daily Revenue"
+                                    stroke="#D4AF37"
+                                    strokeWidth={2}
+                                    dot={false}
+                                    activeDot={{ r: 4, fill: '#121212', stroke: '#D4AF37', strokeWidth: 2 }}
+                                />
+                            </LineChart>
+                        </ResponsiveContainer>
                     </div>
                 </div>
 
                 {/* Right Sidebar / Insights */}
                 <div className="col-span-1 md:col-span-4 flex flex-col gap-6 md:gap-8">
                     <div className="bg-surface-dim/70 backdrop-blur-xl border border-[rgba(212,175,55,0.15)] p-6 md:p-8 rounded-2xl flex-grow shadow-[0_8px_32px_rgba(0,0,0,0.4)]">
-                        <h2 className="font-headline-md text-xl text-on-surface mb-6 m-0">Key Drivers</h2>
+                        <h2 className="font-headline-md text-xl text-on-surface mb-6 m-0 flex items-center gap-2">
+                            <span className="material-symbols-outlined text-primary">insights</span>
+                            Key Drivers
+                        </h2>
                         <ul className="flex flex-col gap-4 p-0 m-0 list-none">
-                            {data.key_drivers.map((driver: any, idx: number) => (
+                            {data.key_drivers.map((driver, idx) => (
                                 <li key={idx} className="flex items-center justify-between border-b border-white/5 pb-4 last:border-0 last:pb-0">
-                                    <span className="font-body-sm text-on-surface">{driver.name}</span>
+                                    <span className="font-body-sm text-on-surface flex items-center gap-2">
+                                        <span className="w-2 h-2 rounded-full" style={{ backgroundColor: COLORS[idx % COLORS.length] }}></span>
+                                        {driver.name}
+                                    </span>
                                     <span className={`font-body-sm ${driver.trend === 'up' ? 'text-[#4ade80]' : 'text-error'}`}>
                                         {driver.change}
                                     </span>
@@ -155,7 +241,7 @@ export default function InsightsDashboard() {
                     <div className="bg-gradient-to-br from-primary-container/20 to-black/80 backdrop-blur-xl border border-primary-container/30 p-6 md:p-8 rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.4)]">
                         <h2 className="font-headline-md text-xl text-primary mb-4 m-0 flex items-center gap-2">
                             <span className="material-symbols-outlined text-[20px]">smart_toy</span>
-                            Jade Insight
+                            AI Insight
                         </h2>
                         <p className="font-body-sm text-on-surface-variant italic border-l-2 border-primary pl-4 py-1 m-0 leading-relaxed">
                             "{data.jade_insight}"

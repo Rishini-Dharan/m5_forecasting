@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate, Link, useLocation } from 'react-router-dom';
-import { API_BASE_URL } from '../config';
+import { ENDPOINTS } from '../config';
 
 export default function LoginPage() {
     const navigate = useNavigate();
@@ -10,6 +10,7 @@ export default function LoginPage() {
     const [formData, setFormData] = useState({ email: '', password: '' });
     const [message, setMessage] = useState<string | null>(fromSignup ? "Account created! Please log in." : null);
     const [error, setError] = useState<string | null>(null);
+    const [loading, setLoading] = useState(false);
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -19,9 +20,10 @@ export default function LoginPage() {
         e.preventDefault();
         setError(null);
         setMessage(null);
+        setLoading(true);
 
         try {
-            const response = await fetch(`${API_BASE_URL}/auth/login`, {
+            const response = await fetch(ENDPOINTS.auth.login, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(formData)
@@ -48,6 +50,8 @@ export default function LoginPage() {
             }
         } catch (err: any) {
             setError(err.message || 'An error occurred');
+        } finally {
+            setLoading(false);
         }
     };
 
@@ -71,12 +75,12 @@ export default function LoginPage() {
                 </div>
                 
                 {message && (
-                    <div className="mb-6 p-3 bg-success/10 border border-[#4ade80]/30 rounded-lg text-center text-[#4ade80] font-body-sm">
+                    <div className="mb-6 p-3 bg-[#4ade80]/10 border border-[#4ade80]/30 rounded-lg text-center text-[#4ade80] font-body-sm">
                         {message}
                     </div>
                 )}
                 {error && (
-                    <div className="mb-6 p-3 bg-error/10 border border-error/30 rounded-lg text-center text-error font-body-sm">
+                    <div className="mb-6 p-3 bg-[#ef4444]/10 border border-[#ef4444]/30 rounded-lg text-center text-[#ef4444] font-body-sm">
                         {error}
                     </div>
                 )}
@@ -109,8 +113,12 @@ export default function LoginPage() {
                         />
                     </div>
                     
-                    <button type="submit" className="mt-4 w-full bg-primary-container text-[#050505] py-3.5 rounded-lg font-label-caps text-label-caps hover:bg-[#ffe088] transition-all duration-300 shadow-[inset_0_1px_0_rgba(255,255,255,0.3)]">
-                        Log In
+                    <button 
+                        type="submit" 
+                        disabled={loading}
+                        className="mt-4 w-full bg-primary-container text-[#050505] py-3.5 rounded-lg font-label-caps text-label-caps hover:bg-[#ffe088] transition-all duration-300 shadow-[inset_0_1px_0_rgba(255,255,255,0.3)] disabled:opacity-50"
+                    >
+                        {loading ? 'Signing in...' : 'Log In'}
                     </button>
                 </form>
 
