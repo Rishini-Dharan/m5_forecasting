@@ -73,6 +73,37 @@ export default function InsightsDashboard() {
         return null;
     };
 
+    const handleExport = () => {
+        if (!data) return;
+
+        const lines = [];
+        lines.push("Metric,Value,Trend/Status,Growth");
+        lines.push(`"Projected Revenue","${data.projected_revenue.value}","${data.projected_revenue.trend}","${data.projected_revenue.growth}"`);
+        lines.push(`"Confidence Interval","${data.confidence_interval.value}","${data.confidence_interval.status}",""`);
+        
+        lines.push("");
+        lines.push("Key Driver,Change,Trend");
+        data.key_drivers.forEach((driver: any) => {
+            lines.push(`"${driver.name}","${driver.change}","${driver.trend}"`);
+        });
+        
+        lines.push("");
+        lines.push("Jade AI Insight");
+        const safeInsight = data.jade_insight.replace(/"/g, '""');
+        lines.push(`"${safeInsight}"`);
+
+        const csvContent = lines.join("\n");
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        
+        const link = document.createElement("a");
+        link.setAttribute("href", url);
+        link.setAttribute("download", "m5_global_insights_export.csv");
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
+
     if (loading) {
         return (
             <div className="flex flex-col gap-8 h-full items-center justify-center">
@@ -104,14 +135,11 @@ export default function InsightsDashboard() {
                     </h1>
                 </div>
                 <div className="flex gap-4">
-                    <button 
-                        onClick={() => window.print()}
-                        className="bg-transparent border border-white/20 text-on-surface px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-white/5 transition-colors font-label-caps text-[11px] uppercase tracking-widest cursor-pointer"
-                    >
+                    <button onClick={handleExport} className="bg-transparent border border-white/20 text-on-surface px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-white/5 transition-colors font-label-caps text-[11px] uppercase tracking-widest cursor-pointer">
                         <span className="material-symbols-outlined text-[18px]">download</span>
                         Export
                     </button>
-                    <Link to="/dashboard/store/CA_1" className="bg-primary-container text-[#050505] px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-[#ffe088] transition-colors font-label-caps text-[11px] uppercase tracking-widest cursor-pointer no-underline shadow-[inset_0_1px_0_rgba(255,255,255,0.3)]">
+                    <Link to="/dashboard" className="bg-primary-container text-[#050505] px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-[#ffe088] transition-colors font-label-caps text-[11px] uppercase tracking-widest cursor-pointer no-underline shadow-[inset_0_1px_0_rgba(255,255,255,0.3)]">
                         <span className="material-symbols-outlined text-[18px]">add</span>
                         New Forecast
                     </Link>
@@ -178,10 +206,12 @@ export default function InsightsDashboard() {
                 {/* Main Chart Area - Real Recharts */}
                 <div className="col-span-1 md:col-span-8 bg-surface-dim/70 backdrop-blur-xl border border-[rgba(212,175,55,0.15)] p-6 md:p-8 rounded-2xl min-h-[400px] flex flex-col shadow-[0_8px_32px_rgba(0,0,0,0.4)]">
                     <div className="flex justify-between items-center mb-6">
-                        <h2 className="font-headline-md text-xl text-on-surface m-0 flex items-center gap-2">
-                            <span className="material-symbols-outlined text-secondary">monitoring</span>
-                            Revenue Trajectory
-                        </h2>
+                        <h2 className="font-headline-md text-xl text-on-surface m-0">Revenue Trajectory</h2>
+                        <div className="flex gap-4">
+                            <button className="font-label-caps text-[11px] text-primary border-b border-primary pb-1 uppercase tracking-widest bg-transparent cursor-pointer">1M</button>
+                            <button className="font-label-caps text-[11px] text-on-surface-variant border-b border-transparent hover:text-on-surface hover:border-white/20 pb-1 uppercase tracking-widest bg-transparent transition-all cursor-pointer">3M</button>
+                            <button className="font-label-caps text-[11px] text-on-surface-variant border-b border-transparent hover:text-on-surface hover:border-white/20 pb-1 uppercase tracking-widest bg-transparent transition-all cursor-pointer">YTD</button>
+                        </div>
                     </div>
                     <div className="flex-grow h-64">
                         <ResponsiveContainer width="100%" height="100%">
