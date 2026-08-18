@@ -15,7 +15,7 @@ def seed_admin():
     sql_check = "SELECT id FROM users WHERE email = %s;"
     existing = db.execute_query(sql_check, (email,), fetch=True)
     if existing:
-        print(f"✅ Admin account already exists: {email}")
+        print(f"[OK] Admin account already exists: {email}")
         return
 
     # Create admin
@@ -24,12 +24,12 @@ def seed_admin():
     
     try:
         result = db.execute_query(sql_insert, (email, encrypted_pass, "ADMIN", None), fetch=True)
-        print("✅ Successfully seeded Master Admin account!")
-        print(f"📧 Email: {email}")
-        print(f"🔑 Password: {password}")
-        print(f"👤 Role: ADMIN")
+        print("[OK] Successfully seeded Master Admin account!")
+        print(f"[INFO] Email: {email}")
+        print(f"[INFO] Password: {password}")
+        print(f"[INFO] Role: ADMIN")
     except Exception as e:
-        print(f"❌ Failed to seed admin: {e}")
+        print(f"[ERROR] Failed to seed admin: {e}")
 
 if __name__ == "__main__":
     seed_admin()
