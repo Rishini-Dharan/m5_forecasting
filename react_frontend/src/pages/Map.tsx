@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { ComposableMap, Geographies, Geography, Marker } from "react-simple-maps";
 import { ENDPOINTS } from "../config";
@@ -14,14 +14,9 @@ interface StoreMarker {
 
 export default function MapDashboard() {
   const navigate = useNavigate();
-  const [position, setPosition] = useState<{ coordinates: [number, number]; zoom: number }>({
-    coordinates: [-96, 38],
-    zoom: 1,
-  });
   const [selectedState, setSelectedState] = useState<string | null>(null);
   const [stores, setStores] = useState<StoreMarker[]>([]);
   const [loading, setLoading] = useState(true);
-  const [storeDetails, setStoreDetails] = useState<Record<string, any>>({});
 
   const US_STORES: StoreMarker[] = [
     { name: "California", id: "CA_1", coordinates: [-122.4194, 37.7749], stores: ["CA_1", "CA_2", "CA_3", "CA_4"] },

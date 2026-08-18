@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { useParams } from 'react-router-dom';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, BarChart, Bar, Cell } from 'recharts';
 import { ENDPOINTS } from '../config';
 
@@ -26,7 +26,6 @@ const COLORS = ['#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6'];
 
 export default function ForecastingDashboard() {
     const { storeId } = useParams<{ storeId: string }>();
-    const navigate = useNavigate();
     const userRole = localStorage.getItem('user_role');
     const assignedStoreId = localStorage.getItem('store_id');
 
@@ -42,7 +41,6 @@ export default function ForecastingDashboard() {
         is_snap_day: 0
     });
     const [predictions, setPredictions] = useState<number[] | null>(null);
-    const [historicalData, setHistoricalData] = useState<HistoricalDataPoint[]>([]);
     const [chartData, setChartData] = useState<any[]>([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -455,5 +453,3 @@ export default function ForecastingDashboard() {
         </div>
     );
 }
-
-export default ForecastingDashboard;

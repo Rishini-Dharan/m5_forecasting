@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, BarChart, Bar, Cell, ResponsiveContainer as RC } from 'recharts';
+import { useState, useEffect } from 'react';
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import { Link } from 'react-router-dom';
 import { ENDPOINTS } from '../config';
 

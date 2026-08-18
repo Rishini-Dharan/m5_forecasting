@@ -21,7 +21,6 @@ export default function AdminPanel() {
     const [loading, setLoading] = useState(false);
     const [users, setUsers] = useState<User[]>([]);
     const [usersLoading, setUsersLoading] = useState(false);
-    const [showUserList, setShowUserList] = useState(false);
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
         setFormData({ ...formData, [e.target.name]: e.target.value });
