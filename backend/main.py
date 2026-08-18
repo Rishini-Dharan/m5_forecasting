@@ -5,7 +5,7 @@ import logging
 from config import settings
 from db.db import db, init_db
 from routes.auth_routes import router as auth_router
-from routes.predict_routes import router as predict_router, load_lgb_model
+from routes.predict_routes import router as predict_router
 from routes.data_routes import router as data_router
 from models import load_lgb_model
 
