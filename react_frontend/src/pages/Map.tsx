@@ -79,12 +79,10 @@ export default function MapDashboard() {
   }, []);
 
   const handleMarkerClick = (marker: StoreMarker) => {
-    setPosition({ coordinates: marker.coordinates, zoom: 4 });
     setSelectedState(marker.name);
   };
 
   const handleReset = () => {
-    setPosition({ coordinates: [-96, 38], zoom: 1 });
     setSelectedState(null);
   };
 

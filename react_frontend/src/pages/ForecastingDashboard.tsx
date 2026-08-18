@@ -109,8 +109,6 @@ export default function ForecastingDashboard() {
                         lastHistValue = histData.length > 0 ? histData[histData.length - 1].sales : 0;
                     }
 
-                    setHistoricalData(histData);
-
                     // Build chart data: historical + predicted
                     const combinedData: any[] = [];
                     
