@@ -1,4 +1,5 @@
 import os
+import json
 import logging
 import pickle
 import joblib
@@ -88,7 +89,6 @@ def get_models():
         load_hybrid_model()
     return sarimax_model, xgboost_model
 
-import json
 
 def prepare_features(item_id: str, store_id: str, historical_sales: list, base_price: float, is_weekend: int, is_snap_day: int) -> np.ndarray:
     """
