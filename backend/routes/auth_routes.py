@@ -48,7 +48,7 @@ def create_user(req: AdminCreateUser, current_user: dict = Depends(get_current_u
     if result:
         return {"status": "success",
                 "message": f"User {req.email} created as {req.role}!", 
-                "user_id": result[0][0]
+                "user_id": result[0]["id"]
             }
     
     raise HTTPException(status_code=400, detail="Creation failed. Email might already exist.")
@@ -62,9 +62,9 @@ def login(req: UserLogin):
         raise HTTPException(status_code=401, detail="Invalid email or password")
         
     user = result[0]
-    db_password_hash = user[2]
-    role = user[3]
-    store_id = user[4]
+    db_password_hash = user["password_hash"]
+    role = user["role"]
+    store_id = user["store_id"]
     
     if not verify_password(req.password, db_password_hash):
         raise HTTPException(status_code=401, detail="Invalid email or password")
