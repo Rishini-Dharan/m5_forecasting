@@ -69,6 +69,12 @@ def predict_sales(req: PredictionRequest, current_user: dict = Depends(get_curre
         VALUES (%s, %s, %s, %s, %s)
         """
         import json
+        
+        # Get user_id from email (sub field in JWT)
+        user_query = "SELECT id FROM users WHERE email = %s;"
+        user_result = db.execute_query(user_query, (current_user.get("sub"),), fetch=True)
+        user_id = user_result[0]["id"] if user_result else None
+        
         features = {
             "price": req.price,
             "is_weekend": req.is_weekend,
@@ -76,7 +82,7 @@ def predict_sales(req: PredictionRequest, current_user: dict = Depends(get_curre
             "forecast_days": req.forecast_days
         }
         db.execute_query(log_query, (
-            current_user.get("sub"),
+            user_id,
             req.item_id,
             req.store_id,
             json.dumps(features),
