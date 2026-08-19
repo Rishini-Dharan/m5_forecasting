@@ -67,3 +67,4 @@ examplesjava/
 prophet_models/
 # Model cache
 .cache/
+.vercel
