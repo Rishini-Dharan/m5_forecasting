@@ -58,9 +58,11 @@ function getCategoryInfo(itemId: string) {
 }
 
 function formatNumber(num: number): string {
-  if (num >= 1000000) return `${(num / 1000000).toFixed(1)}M`;
-  if (num >= 1000) return `${(num / 1000).toFixed(1)}K`;
-  return num.toFixed(0);
+  if (num >= 1_000_000) return `${(num / 1_000_000).toFixed(1)}M`;
+  if (num >= 1_000) return `${(num / 1_000).toFixed(1)}K`;
+  if (num >= 100) return num.toFixed(0);
+  // Single-item daily demand is often below 2 units; whole numbers would hide every difference.
+  return num.toFixed(num < 10 ? 2 : 1);
 }
 
 // The trained models cover exactly 28 days, in four 7-day horizon blocks.
@@ -89,6 +91,7 @@ export default function ForecastingDashboard() {
   const [impactData, setImpactData] = useState<FeatureImportance[]>([]);
   const [priceLoading, setPriceLoading] = useState(false);
   const [forecastMeta, setForecastMeta] = useState<{ origin: string; scenario: boolean } | null>(null);
+  const [forecastDates, setForecastDates] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [items, setItems] = useState<ItemWithDetails[]>([]);
@@ -210,6 +213,7 @@ export default function ForecastingDashboard() {
               setPredictions(data.predictions);
 
               setForecastMeta({ origin: data.forecast_origin, scenario: data.scenario_applied });
+              setForecastDates(data.dates || []);
 
               // Fetch historical data
               try {
@@ -308,7 +312,8 @@ export default function ForecastingDashboard() {
 
   const totalPredicted = predictions ? predictions.reduce((a, b) => a + b, 0) : 0;
   const avgPredicted = predictions ? (totalPredicted / predictions.length).toFixed(1) : '--';
-  const maxPredicted = predictions ? Math.max(...predictions).toFixed(1) : '--';
+  const maxPredicted = predictions ? Math.max(...predictions).toFixed(2) : '--';
+  const peakIndex = predictions ? predictions.indexOf(Math.max(...predictions)) : -1;
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
       const { name, value, type } = e.target;
@@ -510,7 +515,7 @@ export default function ForecastingDashboard() {
                   <p className="text-3xl font-bold text-white mt-2">
                       {predictions ? formatNumber(totalPredicted) : '--'}
                   </p>
-                  <p className="text-xs text-gray-500 mt-1">units</p>
+                  <p className="text-xs text-gray-500 mt-1">units over the horizon</p>
               </div>
 
               <div className="bg-gray-900 rounded-xl border border-gray-800 p-6">
@@ -521,7 +526,7 @@ export default function ForecastingDashboard() {
                       </span>
                   </div>
                   <p className="text-3xl font-bold text-white mt-2" style={{ color: WALMART_YELLOW }}>
-                      {avgPredicted !== '--' ? formatNumber(Number(avgPredicted)) : '--'}
+                      {predictions ? formatNumber(totalPredicted / predictions.length) : '--'}
                   </p>
                   <p className="text-xs text-gray-500 mt-1">units/day</p>
               </div>
@@ -534,9 +539,13 @@ export default function ForecastingDashboard() {
                       </span>
                   </div>
                   <p className="text-3xl font-bold text-white mt-2" style={{ color: SUCCESS_GREEN }}>
-                      {maxPredicted !== '--' ? formatNumber(Number(maxPredicted)) : '--'}
+                      {predictions ? formatNumber(Math.max(...predictions)) : '--'}
                   </p>
-                  <p className="text-xs text-gray-500 mt-1">units</p>
+                  <p className="text-xs text-gray-500 mt-1">
+                      {peakIndex >= 0 && forecastDates[peakIndex]
+                          ? `units on ${forecastDates[peakIndex]}`
+                          : 'units'}
+                  </p>
               </div>
           </div>
 
@@ -576,7 +585,12 @@ export default function ForecastingDashboard() {
                           aria-label={`Bar chart of daily forecast units over ${FORECAST_DAYS} days. Total ${totalPredicted.toFixed(1)} units, average ${avgPredicted} per day, peak ${maxPredicted} units.`}
                       >
                           <ResponsiveContainer width="100%" height="100%">
-                              <BarChart data={predictions.map((p, i) => ({ day: `Day ${i + 1}`, sales: p }))}>
+                              <BarChart data={predictions.map((p, i) => ({
+                                  day: forecastDates[i]
+                                      ? new Date(forecastDates[i]).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+                                      : `Day ${i + 1}`,
+                                  sales: p,
+                              }))}>
                                   <CartesianGrid strokeDasharray="3 3" stroke="#374151" vertical={false} />
                                   <XAxis
                                       dataKey="day"
