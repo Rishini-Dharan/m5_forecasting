@@ -12,10 +12,12 @@ services:
         sync: false
       - key: JWT_SECRET_KEY
         sync: false
-      - key: HF_MODEL_REPO
-        value: rishini/NPN-hybrid
-      - key: HF_MODEL_FILENAME
-        value: model.txt
+      # Comma-separated frontend origins. Must be explicit: a wildcard is
+      # incompatible with allow_credentials and browsers will reject it.
+      - key: CORS_ORIGINS
+        sync: false
+      - key: NPN_REPO
+        value: rishini/NPN
       - key: ENVIRONMENT
         value: production
       - key: LOG_LEVEL
@@ -24,9 +26,3 @@ services:
         value: 2
       - key: DB_POOL_MAX
         value: 10
-      - key: CORS_ORIGINS
-        sync: false
-      - key: DEEPGRAM_API_KEY
-        sync: false
-      - key: OPENAI_API_KEY
-        sync: false

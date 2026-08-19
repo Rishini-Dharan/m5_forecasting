@@ -63,3 +63,5 @@ examplesjava/
 .agents/
 
 prophet_models/
+# Model cache
+.cache/

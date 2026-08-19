@@ -1,21 +1,26 @@
-fastapi
-uvicorn[standard]
-lightgbm
-xgboost
-joblib
-statsmodels
-scikit-learn
-pydantic
-python-dotenv
-psycopg2-binary
-psycopg2-pool
-pyjwt
-cryptography
-passlib[bcrypt]
-bcrypt
-pandas
-numpy
-huggingface-hub
-deepgram-sdk
-openai
-httpx
+# Pinned to the versions this project is developed and tested against.
+# lightgbm must match the version the NPN models were trained with (4.5.0).
+fastapi==0.115.0
+uvicorn[standard]==0.51.0
+pydantic==2.9.2
+python-dotenv==1.0.1
+
+# Database
+psycopg2-binary==2.9.9
+
+# Auth
+pyjwt==2.13.0
+bcrypt==4.2.0
+
+# Model + data
+lightgbm==4.5.0
+pandas==2.2.3
+numpy==2.4.6
+pyarrow==24.0.0
+huggingface-hub==0.36.2
+
+# Voice assistant ("Jade", routes/voice_routes.py). That module is untouched and is not
+# currently mounted in main.py, but its dependencies stay so it remains installable.
+deepgram-sdk==3.7.0
+openai==1.54.0
+httpx==0.28.1

@@ -61,7 +61,7 @@ export default function AdminPanel() {
     const fetchUsers = async () => {
         setUsersLoading(true);
         try {
-            const response = await fetch(ENDPOINTS.auth.createUser.replace('/create-user', '/users'), {
+            const response = await fetch(ENDPOINTS.auth.users, {
                 headers: {
                     'Authorization': `Bearer ${localStorage.getItem('jwt') || ''}`
                 }

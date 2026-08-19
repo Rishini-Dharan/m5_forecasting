@@ -1,312 +1,291 @@
-from fastapi import APIRouter, HTTPException, Depends
-from pydantic import BaseModel
-from typing import List
-from db.db import db
-from utils.auth_utils import get_current_user
-import statistics
 import logging
+import statistics
+from typing import List, Optional
+
+from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel, Field
+
+from db.db import db
+from models import npn_loader
+from utils.auth_utils import get_current_user
+from utils.authz import assert_store_access, is_admin, scope_filter
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
+
 class HistoricalDataRequest(BaseModel):
     item_id: str
     store_id: str
-    days: int = 30
+    days: int = Field(28, ge=1, le=365)
+
 
 class DataPoint(BaseModel):
     day: int
     sales: int
+
 
 class HistoricalResponse(BaseModel):
     item_id: str
     store_id: str
     data: List[DataPoint]
 
-class StoreInfo(BaseModel):
-    store_id: str
-    total_records: int
-    total_sales: float
-    avg_daily_sales: float
-    items: List[str]
 
 @router.post("/historical", response_model=HistoricalResponse)
 def get_historical_data(req: HistoricalDataRequest, current_user: dict = Depends(get_current_user)):
-    """Get historical sales data for an item at a store."""
-    if current_user.get("role") == "STORE_OWNER":
-        user_store = current_user.get("store_id")
-        if user_store and req.store_id != user_store:
-            raise HTTPException(status_code=403, detail="Access denied: You can only view data for your assigned store")
-    
-    query = """
-        SELECT day_index, sales 
-        FROM historical_sales 
-        WHERE item_id = %s AND store_id = %s 
+    """Real historical sales for an item at a store."""
+    assert_store_access(current_user, req.store_id)
+
+    results = db.execute_query(
+        """
+        SELECT day_index, sales
+        FROM historical_sales
+        WHERE item_id = %s AND store_id = %s
         ORDER BY day_index DESC
         LIMIT %s
-    """
-    
-    results = db.execute_query(query, (req.item_id, req.store_id, req.days), fetch=True)
-    
-    if not results:
-        return HistoricalResponse(item_id=req.item_id, store_id=req.store_id, data=[])
-    
-    # Reverse to get chronological order
-    data = [{"day": row["day_index"], "sales": row["sales"]} for row in reversed(results)]
-    
-    return HistoricalResponse(
-        item_id=req.item_id,
-        store_id=req.store_id,
-        data=data
+        """,
+        (req.item_id, req.store_id, req.days),
+        fetch=True,
     )
+
+    data = [{"day": row["day_index"], "sales": row["sales"]} for row in reversed(results or [])]
+    return HistoricalResponse(item_id=req.item_id, store_id=req.store_id, data=data)
+
+
+@router.get("/price")
+def get_price(
+    item_id: str = Query(...),
+    store_id: str = Query(...),
+    current_user: dict = Depends(get_current_user),
+):
+    """The real recorded sell_price for a series, so the UI never has to invent one."""
+    assert_store_access(current_user, store_id)
+    try:
+        return {"item_id": item_id, "store_id": store_id,
+                "sell_price": npn_loader.latest_price(item_id, store_id)}
+    except npn_loader.ModelUnavailable as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except Exception:
+        logger.exception("Price lookup failed for %s at %s", item_id, store_id)
+        raise HTTPException(status_code=500, detail="Could not read price")
+
 
 @router.get("/stores")
 def get_stores(current_user: dict = Depends(get_current_user)):
-    """Get list of all stores from the database."""
+    """Stores the caller is allowed to see."""
     try:
-        query = """
-            SELECT DISTINCT store_id 
-            FROM historical_sales 
-            ORDER BY store_id
-        """
-        results = db.execute_query(query, fetch=True)
-        stores = list(set(r["store_id"] for r in results)) if results else []
-        return {"stores": stores}
-    except Exception as e:
-        logger.error(f"Error fetching stores: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        if is_admin(current_user):
+            results = db.execute_query(
+                "SELECT DISTINCT store_id FROM historical_sales ORDER BY store_id", fetch=True
+            )
+            stores = [row["store_id"] for row in results] if results else []
+            if not stores:
+                stores = npn_loader.known_stores()
+            return {"stores": stores}
+
+        # A store owner sees exactly their own store, and only if one is assigned.
+        user_store = current_user.get("store_id")
+        if not user_store:
+            raise HTTPException(
+                status_code=403, detail="Access denied: no store is assigned to this account"
+            )
+        return {"stores": [user_store]}
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception("Error fetching stores")
+        raise HTTPException(status_code=500, detail="Could not fetch stores")
+
 
 @router.get("/items")
 def get_items(current_user: dict = Depends(get_current_user)):
-    """Get list of all items from the database."""
+    """Items visible to the caller, scoped to their store when they are a store owner."""
     try:
-        # For STORE_OWNER, filter items by their store
-        store_filter = ""
-        params = []
-        if current_user.get("role") == "STORE_OWNER":
-            user_store = current_user.get("store_id")
-            if user_store:
-                store_filter = "WHERE store_id = %s"
-                params = [user_store]
-        
-        query = f"""
-            SELECT DISTINCT item_id 
-            FROM historical_sales 
-            {store_filter}
-            ORDER BY item_id
-        """
-        results = db.execute_query(query, params if params else None, fetch=True)
-        items = list(set(r["item_id"] for r in results)) if results else []
+        where, params = scope_filter(current_user)
+        results = db.execute_query(
+            f"SELECT DISTINCT item_id FROM historical_sales {where} ORDER BY item_id",
+            tuple(params) if params else None,
+            fetch=True,
+        )
+        items = [row["item_id"] for row in results] if results else []
+        if not items:
+            items = npn_loader.known_items()
         return {"items": items}
-    except Exception as e:
-        logger.error(f"Error fetching items: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception("Error fetching items")
+        raise HTTPException(status_code=500, detail="Could not fetch items")
+
 
 @router.get("/store/{store_id}")
 def get_store_details(store_id: str, current_user: dict = Depends(get_current_user)):
-    """Get details for a specific store including items and metrics."""
+    """Items and summary metrics for one store."""
+    assert_store_access(current_user, store_id)
     try:
-        items_query = """
-            SELECT DISTINCT item_id 
-            FROM historical_sales 
+        item_rows = db.execute_query(
+            "SELECT DISTINCT item_id FROM historical_sales WHERE store_id = %s ORDER BY item_id",
+            (store_id,),
+            fetch=True,
+        )
+        items = [row["item_id"] for row in item_rows] if item_rows else []
+
+        summary = db.execute_query(
+            """
+            SELECT COUNT(*) AS total_records,
+                   SUM(sales)  AS total_sales,
+                   AVG(sales)  AS avg_sales,
+                   MAX(day_index) AS max_day,
+                   MIN(day_index) AS min_day
+            FROM historical_sales
             WHERE store_id = %s
-            ORDER BY item_id
-        """
-        items_results = db.execute_query(items_query, (store_id,), fetch=True)
-        items = list(set(r["item_id"] for r in items_results)) if items_results else []
-        
-        summary_query = """
-            SELECT 
-                COUNT(*) as total_records,
-                SUM(sales) as total_sales,
-                AVG(sales) as avg_sales,
-                MAX(day_index) as max_day,
-                MIN(day_index) as min_day
-            FROM historical_sales 
-            WHERE store_id = %s
-        """
-        summary = db.execute_query(summary_query, (store_id,), fetch_one=True)
-        
-        if summary:
-            return {
-                "store_id": store_id,
-                "items": items,
-                "total_records": summary["total_records"],
-                "total_sales": float(summary["total_sales"] or 0),
-                "avg_daily_sales": float(summary["avg_sales"] or 0),
-                "day_range": {
-                    "min": summary["min_day"],
-                    "max": summary["max_day"]
-                }
-            }
-        else:
-            return {
-                "store_id": store_id,
-                "items": items,
-                "total_records": 0,
-                "total_sales": 0,
-                "avg_daily_sales": 0,
-                "day_range": {"min": 0, "max": 0}
-            }
-    except Exception as e:
-        logger.error(f"Error fetching store details: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+            """,
+            (store_id,),
+            fetch_one=True,
+        )
+
+        return {
+            "store_id": store_id,
+            "items": items,
+            "total_records": summary["total_records"] if summary else 0,
+            "total_units": float(summary["total_sales"] or 0) if summary else 0.0,
+            "avg_daily_units": float(summary["avg_sales"] or 0) if summary else 0.0,
+            "day_range": {
+                "min": (summary["min_day"] if summary else 0) or 0,
+                "max": (summary["max_day"] if summary else 0) or 0,
+            },
+        }
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception("Error fetching store details for %s", store_id)
+        raise HTTPException(status_code=500, detail="Could not fetch store details")
+
 
 @router.get("/insights")
 def get_global_insights(current_user: dict = Depends(get_current_user)):
-    """Returns global insight metrics calculated from the historical_sales database."""
-    store_filter = ""
-    params = []
-    if current_user.get("role") == "STORE_OWNER":
-        user_store = current_user.get("store_id")
-        if user_store:
-            store_filter = "WHERE store_id = %s"
-            params = [user_store]
-    
-    trajectory_query = f"""
-        SELECT day_index, SUM(sales) as daily_total 
-        FROM historical_sales 
-        {store_filter}
-        GROUP BY day_index 
-        ORDER BY day_index ASC
+    """Insight metrics computed from historical_sales.
+
+    Returns data_available=false rather than inventing numbers when there is nothing to report.
     """
-    traj_results = db.execute_query(trajectory_query, params if params else None, fetch=True)
-    
+    where, params = scope_filter(current_user)
+
+    traj_results = db.execute_query(
+        f"""
+        SELECT day_index, SUM(sales) AS daily_total
+        FROM historical_sales
+        {where}
+        GROUP BY day_index
+        ORDER BY day_index ASC
+        """,
+        tuple(params) if params else None,
+        fetch=True,
+    )
+
     if not traj_results:
-        return _fallback_mock_data()
-    
+        return _empty_insights()
+
     trajectory_data = []
     daily_totals = []
     for idx, row in enumerate(traj_results):
-        trajectory_data.append({"day": idx, "value": float(row["daily_total"])})
-        daily_totals.append(float(row["daily_total"]))
-    
+        total = float(row["daily_total"])
+        trajectory_data.append({"day": idx, "value": total})
+        daily_totals.append(total)
+
     half_point = len(daily_totals) // 2
     first_half_sum = sum(daily_totals[:half_point])
     second_half_sum = sum(daily_totals[half_point:])
-    total_30_days = sum(daily_totals)
+    total_units = sum(daily_totals)
 
-    if first_half_sum > 0:
-        growth_pct = ((second_half_sum - first_half_sum) / first_half_sum) * 100
-    else:
-        growth_pct = 0.0
-
+    growth_pct = ((second_half_sum - first_half_sum) / first_half_sum * 100) if first_half_sum else 0.0
     growth_str = f"+{growth_pct:.1f}%" if growth_pct >= 0 else f"{growth_pct:.1f}%"
-    trend = "up" if growth_pct >= 0 else "down"
 
-    if total_30_days >= 1_000_000:
-        rev_value = f"${total_30_days / 1_000_000:.1f}M"
+    if total_units >= 1_000_000:
+        units_value = f"{total_units / 1_000_000:.1f}M units"
+    elif total_units >= 1_000:
+        units_value = f"{total_units / 1_000:.1f}K units"
     else:
-        rev_value = f"${total_30_days / 1000:.1f}K"
+        units_value = f"{total_units:.0f} units"
 
-    mean_sales = statistics.mean(daily_totals) if daily_totals else 0
-    std_sales = statistics.stdev(daily_totals) if len(daily_totals) > 1 else 0
-    
-    if mean_sales > 0:
-        rsd = std_sales / mean_sales
-        confidence = max(0.0, min(100.0, 100 - (rsd * 100)))
-    else:
-        confidence = 0.0
+    mean_sales = statistics.mean(daily_totals)
+    std_sales = statistics.stdev(daily_totals) if len(daily_totals) > 1 else 0.0
+    stability = max(0.0, min(100.0, 100 - (std_sales / mean_sales * 100))) if mean_sales else 0.0
 
-    anomaly_count = 0
-    for val in daily_totals:
-        if val > mean_sales + (1.5 * std_sales) or val < mean_sales - (1.5 * std_sales):
-            anomaly_count += 1
-            
-    anomaly_status = "Review Required" if anomaly_count > 0 else "Normal Stability"
+    anomaly_count = sum(
+        1 for value in daily_totals if abs(value - mean_sales) > 1.5 * std_sales
+    ) if std_sales else 0
 
-    drivers_query = f"""
-        WITH ItemHalves AS (
-            SELECT 
-                item_id,
-                SUM(CASE WHEN day_index < (SELECT MIN(day_index) + (MAX(day_index) - MIN(day_index))/2 FROM historical_sales {store_filter}) THEN sales ELSE 0 END) as first_half,
-                SUM(CASE WHEN day_index >= (SELECT MIN(day_index) + (MAX(day_index) - MIN(day_index))/2 FROM historical_sales {store_filter}) THEN sales ELSE 0 END) as second_half
-            FROM historical_sales
-            {store_filter}
-            GROUP BY item_id
-        )
-        SELECT 
-            item_id, 
-            first_half, 
-            second_half, 
-            (second_half + first_half) as total
-        FROM ItemHalves
-        ORDER BY total DESC
-        LIMIT 3
-    """
-    drivers_results = db.execute_query(drivers_query, params * 3 if params else None, fetch=True)
-    
-    key_drivers = []
-    top_driver_name = "Unknown"
-    for row in drivers_results:
-        item = row["item_id"]
-        first_h = row["first_half"]
-        second_h = row["second_half"]
-        
-        if top_driver_name == "Unknown":
-            top_driver_name = item
-            
-        if first_h > 0:
-            d_growth = ((second_h - first_h) / first_h) * 100
-        else:
-            d_growth = 0.0
-            
-        d_trend = "up" if d_growth >= 0 else "down"
-        d_growth_str = f"+{d_growth:.1f}%" if d_growth >= 0 else f"{d_growth:.1f}%"
-        
-        clean_name = item.replace("_", " ").title()
-        
-        key_drivers.append({
-            "name": clean_name,
-            "change": d_growth_str,
-            "trend": d_trend
-        })
-
-    jade_insight = f"The recent surge in '{top_driver_name}' strongly correlates with overall network growth. Recommending a capacity review for this item family in Q4."
+    key_drivers, top_driver = _key_drivers(where, params)
 
     return {
-        "projected_revenue": {
-            "value": rev_value,
-            "growth": growth_str,
-            "trend": trend
-        },
-        "confidence_interval": {
-            "value": f"{confidence:.1f}%",
-            "status": "High Accuracy Model Active"
-        },
-        "anomalies": {
-            "count": anomaly_count,
-            "status": anomaly_status
-        },
+        "data_available": True,
+        # Units, not currency: historical_sales stores counts and carries no price.
+        "total_units": {"value": units_value, "growth": growth_str,
+                        "trend": "up" if growth_pct >= 0 else "down"},
+        "demand_stability": {"value": f"{stability:.1f}%",
+                             "status": "100% minus the coefficient of variation"},
+        "anomalies": {"count": anomaly_count,
+                      "status": "Review Required" if anomaly_count else "Normal Stability"},
         "trajectory_data": trajectory_data,
         "key_drivers": key_drivers,
-        "jade_insight": jade_insight
+        "top_driver": top_driver,
     }
 
-def _fallback_mock_data():
-    trajectory_data = []
-    for i in range(30):
-        trajectory_data.append({"day": i, "value": 100 + (i * 2)})
-        
+
+def _key_drivers(where: str, params: list):
+    """Top three items by volume, with their first-half vs second-half change."""
+    midpoint_row = db.execute_query(
+        f"SELECT MIN(day_index) AS lo, MAX(day_index) AS hi FROM historical_sales {where}",
+        tuple(params) if params else None,
+        fetch_one=True,
+    )
+    if not midpoint_row or midpoint_row["lo"] is None:
+        return [], None
+    midpoint = midpoint_row["lo"] + (midpoint_row["hi"] - midpoint_row["lo"]) / 2
+
+    # One parameterised query -- the midpoint is passed as a value, not interpolated.
+    driver_params = [midpoint, midpoint] + list(params)
+    drivers = db.execute_query(
+        f"""
+        SELECT item_id,
+               SUM(CASE WHEN day_index <  %s THEN sales ELSE 0 END) AS first_half,
+               SUM(CASE WHEN day_index >= %s THEN sales ELSE 0 END) AS second_half,
+               SUM(sales) AS total
+        FROM historical_sales
+        {where}
+        GROUP BY item_id
+        ORDER BY total DESC
+        LIMIT 3
+        """,
+        tuple(driver_params),
+        fetch=True,
+    )
+
+    key_drivers = []
+    top_driver = None
+    for row in drivers or []:
+        if top_driver is None:
+            top_driver = row["item_id"]
+        first_half = float(row["first_half"] or 0)
+        second_half = float(row["second_half"] or 0)
+        change = ((second_half - first_half) / first_half * 100) if first_half else 0.0
+        key_drivers.append({
+            "name": row["item_id"].replace("_", " ").title(),
+            "change": f"+{change:.1f}%" if change >= 0 else f"{change:.1f}%",
+            "trend": "up" if change >= 0 else "down",
+        })
+    return key_drivers, top_driver
+
+
+def _empty_insights():
+    """No data is no data. The UI shows an empty state instead of invented metrics."""
     return {
-        "projected_revenue": {
-            "value": "$24.8M",
-            "growth": "+12.4%",
-            "trend": "up"
-        },
-        "confidence_interval": {
-            "value": "94.2%",
-            "status": "High Accuracy Model Active"
-        },
-        "anomalies": {
-            "count": 2,
-            "status": "Review Required"
-        },
-        "trajectory_data": trajectory_data,
-        "key_drivers": [
-            { "name": "Enterprise Licensing", "change": "+8.2%", "trend": "up" },
-            { "name": "Api Usage", "change": "+15.4%", "trend": "up" },
-            { "name": "Professional Services", "change": "-2.1%", "trend": "down" }
-        ],
-        "jade_insight": "The recent surge in API usage strongly correlates with the rollout of v2.0. Recommending a capacity review for Q4."
+        "data_available": False,
+        "message": "No sales data found. Run scripts/seed_data.py to load the M5 dataset.",
+        "total_units": {"value": "--", "growth": "--", "trend": "flat"},
+        "demand_stability": {"value": "--", "status": "No data"},
+        "anomalies": {"count": 0, "status": "No data"},
+        "trajectory_data": [],
+        "key_drivers": [],
+        "top_driver": None,
     }

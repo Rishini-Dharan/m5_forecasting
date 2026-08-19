@@ -5,15 +5,18 @@ export const ENDPOINTS = {
   auth: {
     login: `${API_BASE_URL}/auth/login`,
     createUser: `${API_BASE_URL}/auth/create-user`,
+    users: `${API_BASE_URL}/auth/users`,
   },
   prediction: {
     predict: `${API_BASE_URL}/api/predict`,
     modelInfo: `${API_BASE_URL}/api/model/info`,
+    featureImportance: `${API_BASE_URL}/api/model/feature-importance`,
   },
   data: {
     historical: `${API_BASE_URL}/api/data/historical`,
     insights: `${API_BASE_URL}/api/data/insights`,
     stores: `${API_BASE_URL}/api/data/stores`,
     items: `${API_BASE_URL}/api/data/items`,
+    price: `${API_BASE_URL}/api/data/price`,
   },
 } as const;

@@ -4,12 +4,15 @@ import { Link } from 'react-router-dom';
 import { ENDPOINTS } from '../config';
 
 interface InsightData {
-  projected_revenue: {
+  data_available: boolean;
+  message?: string;
+  // Units, not currency: historical_sales stores counts and carries no price.
+  total_units: {
     value: string;
     growth: string;
     trend: string;
   };
-  confidence_interval: {
+  demand_stability: {
     value: string;
     status: string;
   };
@@ -23,7 +26,7 @@ interface InsightData {
     change: string;
     trend: string;
   }>;
-  jade_insight: string;
+  top_driver: string | null;
 }
 
 const COLORS = ['#D4AF37', '#3b82f6', '#10b981', '#ef4444', '#8b5cf6'];
@@ -78,8 +81,8 @@ export default function InsightsDashboard() {
 
         const lines = [];
         lines.push("Metric,Value,Trend/Status,Growth");
-        lines.push(`"Projected Revenue","${data.projected_revenue.value}","${data.projected_revenue.trend}","${data.projected_revenue.growth}"`);
-        lines.push(`"Confidence Interval","${data.confidence_interval.value}","${data.confidence_interval.status}",""`);
+        lines.push(`"Total Units Sold","${data.total_units.value}","${data.total_units.trend}","${data.total_units.growth}"`);
+        lines.push(`"Demand Stability","${data.demand_stability.value}","${data.demand_stability.status}",""`);
         
         lines.push("");
         lines.push("Key Driver,Change,Trend");
@@ -89,7 +92,7 @@ export default function InsightsDashboard() {
         
         lines.push("");
         lines.push("Jade AI Insight");
-        const safeInsight = data.jade_insight.replace(/"/g, '""');
+        const safeInsight = (data.top_driver ?? 'none').replace(/"/g, '""');
         lines.push(`"${safeInsight}"`);
 
         const csvContent = lines.join("\n");
@@ -118,6 +121,23 @@ export default function InsightsDashboard() {
             <div className="flex flex-col gap-8 h-full items-center justify-center text-error">
                 <span className="material-symbols-outlined text-[32px]">error</span>
                 <p className="font-body-sm">{error || 'Failed to load data.'}</p>
+            </div>
+        );
+    }
+
+    // An honest empty state. This page used to fall back to invented figures
+    // ("$24.8M", "Enterprise Licensing") that were indistinguishable from real ones.
+    if (!data.data_available) {
+        return (
+            <div className="flex flex-col gap-6 h-full items-center justify-center text-center">
+                <span className="material-symbols-outlined text-primary text-[32px]">database</span>
+                <p className="font-headline-md text-xl text-on-surface m-0">No sales data yet</p>
+                <p className="font-body-sm text-on-surface-variant max-w-md m-0">
+                    {data.message || 'The historical_sales table is empty.'}
+                </p>
+                <code className="font-mono text-[12px] text-primary bg-black/40 px-4 py-2 rounded-lg">
+                    python scripts/seed_data.py --source npn
+                </code>
             </div>
         );
     }
@@ -151,19 +171,19 @@ export default function InsightsDashboard() {
                 {/* Key Metric 1 */}
                 <div className="col-span-1 md:col-span-6 bg-surface-dim/70 backdrop-blur-xl border border-[rgba(212,175,55,0.15)] p-6 md:p-8 rounded-2xl flex flex-col justify-between min-h-[160px] shadow-[0_8px_32px_rgba(0,0,0,0.4)] relative overflow-hidden group">
                     <div className="flex justify-between items-start z-10 relative">
-                        <h3 className="font-body-sm text-on-surface-variant m-0">Projected Revenue</h3>
+                        <h3 className="font-body-sm text-on-surface-variant m-0">Total Units Sold</h3>
                         <span className="material-symbols-outlined text-primary">
-                            {data.projected_revenue.trend === 'up' ? 'trending_up' : 'trending_down'}
+                            {data.total_units.trend === 'up' ? 'trending_up' : 'trending_down'}
                         </span>
                     </div>
                     <div className="z-10 relative mt-8">
                         <p className="font-headline-xl text-4xl text-on-surface m-0 tracking-tight">
-                            {data.projected_revenue.value}
+                            {data.total_units.value}
                         </p>
                         <p className={`font-label-caps text-[11px] mt-2 m-0 uppercase tracking-widest ${
-                            data.projected_revenue.trend === 'up' ? 'text-[#4ade80]' : 'text-error'
+                            data.total_units.trend === 'up' ? 'text-[#4ade80]' : 'text-error'
                         }`}>
-                            {data.projected_revenue.growth} vs previous period
+                            {data.total_units.growth} vs previous period
                         </p>
                     </div>
                     <div className="absolute -right-12 -top-12 w-32 h-32 bg-primary-container/10 rounded-full blur-2xl group-hover:bg-primary-container/20 transition-all duration-700 pointer-events-none"></div>
@@ -172,15 +192,15 @@ export default function InsightsDashboard() {
                 {/* Key Metric 2 */}
                 <div className="col-span-1 md:col-span-6 bg-surface-dim/70 backdrop-blur-xl border border-[rgba(212,175,55,0.15)] p-6 md:p-8 rounded-2xl flex flex-col justify-between min-h-[160px] shadow-[0_8px_32px_rgba(0,0,0,0.4)]">
                     <div className="flex justify-between items-start">
-                        <h3 className="font-body-sm text-on-surface-variant m-0">Confidence Interval</h3>
+                        <h3 className="font-body-sm text-on-surface-variant m-0">Demand Stability</h3>
                         <span className="material-symbols-outlined text-on-surface-variant">analytics</span>
                     </div>
                     <div className="mt-8">
                         <p className="font-headline-xl text-4xl text-on-surface m-0 tracking-tight">
-                            {data.confidence_interval.value}
+                            {data.demand_stability.value}
                         </p>
                         <p className="font-label-caps text-[11px] text-on-surface-variant mt-2 m-0 uppercase tracking-widest">
-                            {data.confidence_interval.status}
+                            {data.demand_stability.status}
                         </p>
                     </div>
                 </div>
@@ -270,11 +290,13 @@ export default function InsightsDashboard() {
 
                     <div className="bg-gradient-to-br from-primary-container/20 to-black/80 backdrop-blur-xl border border-primary-container/30 p-6 md:p-8 rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.4)]">
                         <h2 className="font-headline-md text-xl text-primary mb-4 m-0 flex items-center gap-2">
-                            <span className="material-symbols-outlined text-[20px]">smart_toy</span>
-                            AI Insight
+                            <span className="material-symbols-outlined text-[20px]">insights</span>
+                            Summary
                         </h2>
-                        <p className="font-body-sm text-on-surface-variant italic border-l-2 border-primary pl-4 py-1 m-0 leading-relaxed">
-                            "{data.jade_insight}"
+                        <p className="font-body-sm text-on-surface-variant border-l-2 border-primary pl-4 py-1 m-0 leading-relaxed">
+                            {data.top_driver
+                                ? `Highest-volume item in this period: ${data.top_driver}. Units are ${data.total_units.growth} versus the first half of the window.`
+                                : 'Not enough sales data to summarise.'}
                         </p>
                     </div>
                 </div>
