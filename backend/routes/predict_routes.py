@@ -87,6 +87,38 @@ def model_feature_importance(
         raise HTTPException(status_code=500, detail="Could not read feature importance")
 
 
+@router.get("/model/explain")
+def model_explain(
+    item_id: str = Query(..., description="Item to explain, e.g. FOODS_1_001"),
+    store_id: str = Query(..., description="Store to explain, e.g. CA_1"),
+    days: int = Query(npn_loader.MAX_HORIZON, ge=1, le=npn_loader.MAX_HORIZON),
+    top_n: int = Query(8, ge=1, le=34),
+    current_user: dict = Depends(get_current_user),
+):
+    """Why this series forecasts the way it does.
+
+    Uses LightGBM's exact SHAP contributions, so the drivers reconstruct the prediction rather
+    than approximating it.
+    """
+    assert_store_access(current_user, store_id)
+    try:
+        return {"status": "success", **npn_loader.explain_forecast(item_id, store_id, days, top_n)}
+    except npn_loader.ModelUnavailable as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except Exception:
+        logger.exception("Explanation failed for %s at %s", item_id, store_id)
+        raise HTTPException(status_code=500, detail="Could not explain the forecast")
+
+
+@router.get("/model/features")
+def model_features(current_user: dict = Depends(get_current_user)):
+    """Plain-language description of every feature the model uses."""
+    try:
+        return {"status": "success", "features": npn_loader.feature_catalog()}
+    except npn_loader.ModelUnavailable as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+
+
 @router.post("/predict", response_model=PredictionResponse)
 def predict_sales(req: PredictionRequest, current_user: dict = Depends(get_current_user)):
     """Forecast up to 28 days of unit sales for one item at one store."""

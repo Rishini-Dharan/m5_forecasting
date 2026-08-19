@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, BarChart, Bar, Cell } from 'recharts';
 import { ENDPOINTS } from '../config';
+import { authHeaders, errorFromResponse, toMessage } from '../lib/api';
+import ForecastExplanation from '../components/ForecastExplanation';
 
 interface PredictionResponse {
   status: string;
@@ -104,9 +106,7 @@ export default function ForecastingDashboard() {
       const fetchItems = async () => {
           try {
               const response = await fetch(ENDPOINTS.data.items, {
-                  headers: {
-                      'Authorization': `Bearer ${localStorage.getItem('jwt') || ''}`
-                  }
+                  headers: authHeaders()
               });
               if (response.ok) {
                   const data = await response.json();
@@ -145,7 +145,7 @@ export default function ForecastingDashboard() {
           try {
               const response = await fetch(
                   `${ENDPOINTS.data.price}?item_id=${encodeURIComponent(formData.item_id)}&store_id=${encodeURIComponent(formData.store_id)}`,
-                  { headers: { 'Authorization': `Bearer ${localStorage.getItem('jwt') || ''}` } }
+                  { headers: authHeaders() }
               );
               if (response.ok && !cancelled) {
                   const data = await response.json();
@@ -168,7 +168,7 @@ export default function ForecastingDashboard() {
           try {
               const response = await fetch(
                   `${ENDPOINTS.prediction.featureImportance}?store_id=${encodeURIComponent(formData.store_id)}&top_n=8`,
-                  { headers: { 'Authorization': `Bearer ${localStorage.getItem('jwt') || ''}` } }
+                  { headers: authHeaders() }
               );
               if (response.ok) {
                   const data = await response.json();
@@ -190,10 +190,7 @@ export default function ForecastingDashboard() {
       try {
           const response = await fetch(ENDPOINTS.prediction.predict, {
               method: 'POST',
-              headers: {
-                  'Content-Type': 'application/json',
-                  'Authorization': `Bearer ${localStorage.getItem('jwt') || ''}`
-              },
+              headers: authHeaders({ 'Content-Type': 'application/json' }),
               body: JSON.stringify({
                   item_id: formData.item_id,
                   store_id: formData.store_id,
@@ -204,8 +201,7 @@ export default function ForecastingDashboard() {
           });
 
           if (!response.ok) {
-              const errorData = await response.json();
-              throw new Error(errorData.detail || 'Failed to fetch prediction');
+              throw new Error(await errorFromResponse(response, 'Failed to fetch prediction'));
           }
 
           const data: PredictionResponse = await response.json();
@@ -219,10 +215,7 @@ export default function ForecastingDashboard() {
               try {
                   const histResponse = await fetch(ENDPOINTS.data.historical, {
                       method: 'POST',
-                      headers: {
-                          'Content-Type': 'application/json',
-                          'Authorization': `Bearer ${localStorage.getItem('jwt') || ''}`
-                      },
+                      headers: authHeaders({ 'Content-Type': 'application/json' }),
                       body: JSON.stringify({ 
                           item_id: formData.item_id, 
                           store_id: formData.store_id,
@@ -276,8 +269,8 @@ export default function ForecastingDashboard() {
           } else {
               throw new Error('Prediction failed');
           }
-      } catch (err: any) {
-          setError(err.message || 'An error occurred during prediction.');
+      } catch (err: unknown) {
+          setError(toMessage(err, 'An error occurred during prediction.'));
       } finally {
           setLoading(false);
       }
@@ -329,6 +322,7 @@ export default function ForecastingDashboard() {
 
   return (
       <div className="min-h-screen bg-gray-950 text-white">
+          <a href="#forecast-main" className="skip-link">Skip to forecast</a>
           {/* Header Bar */}
           <header className="bg-gray-900 border-b border-gray-800 sticky top-0 z-50">
               <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -337,7 +331,7 @@ export default function ForecastingDashboard() {
                           <span className="text-2xl font-bold text-white" style={{ color: WALMART_BLUE }}>
                               Walmart Forecasting
                           </span>
-                          <nav className="hidden md:flex gap-6">
+                          <nav aria-label="Main" className="hidden md:flex gap-6">
                               <a href="/dashboard" className="text-gray-400 hover:text-white transition-colors text-sm font-medium">HQ Map</a>
                               <a href="/dashboard/insights" className="text-gray-400 hover:text-white transition-colors text-sm font-medium">Insights</a>
                               <a href="/dashboard/admin" className="text-gray-400 hover:text-white transition-colors text-sm font-medium">Admin</a>
@@ -359,7 +353,7 @@ export default function ForecastingDashboard() {
           </header>
 
           {/* Main Content */}
-          <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <main id="forecast-main" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
               {/* Page Header */}
               <div className="mb-8">
                   <div className="flex items-center gap-3 mb-4">
@@ -375,11 +369,19 @@ export default function ForecastingDashboard() {
 
               {/* Error Banner */}
               {error && (
-                  <div className="mb-6 p-4 bg-red-900/30 border border-red-700 rounded-lg flex items-center gap-3">
-                      <span className="text-red-400">⚠️</span>
+                  <div role="alert" className="mb-6 p-4 bg-red-900/30 border border-red-700 rounded-lg flex items-center gap-3">
+                      <span className="text-red-400" aria-hidden="true">⚠️</span>
                       <p className="text-red-300 text-sm">{error}</p>
                   </div>
               )}
+
+              <p className="sr-only" aria-live="polite">
+                  {loading
+                      ? 'Generating forecast'
+                      : predictions
+                          ? `Forecast ready. ${FORECAST_DAYS} days, ${totalPredicted.toFixed(1)} total units.`
+                          : ''}
+              </p>
 
               {/* Main Grid */}
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
@@ -394,8 +396,8 @@ export default function ForecastingDashboard() {
                           </h2>
 
                           {error && (
-                              <div className="mb-4 p-3 bg-red-900/30 border border-red-700 rounded-lg text-red-300 text-sm flex items-center gap-2">
-                                  <span>⚠️</span>
+                              <div role="alert" className="mb-4 p-3 bg-red-900/30 border border-red-700 rounded-lg text-red-300 text-sm flex items-center gap-2">
+                                  <span aria-hidden="true">⚠️</span>
                                   <span>{error}</span>
                               </div>
                           )}
@@ -403,7 +405,7 @@ export default function ForecastingDashboard() {
                           <form onSubmit={handlePredict} className="space-y-6">
                               {/* Item Selector */}
                               <div>
-                                  <label className="block text-sm font-medium text-gray-300 mb-2">Item</label>
+                                  <label htmlFor="item_id" className="block text-sm font-medium text-gray-300 mb-2">Item</label>
                                   {itemsLoading ? (
                                       <div className="w-full p-3 bg-gray-800 border border-gray-700 rounded-lg text-gray-500 animate-pulse">
                                           Loading items...
@@ -432,7 +434,7 @@ export default function ForecastingDashboard() {
 
                               {/* Store ID */}
                   <div>
-                      <label className="block text-sm font-medium text-gray-300 mb-2">Store ID</label>
+                      <label htmlFor="store_id" className="block text-sm font-medium text-gray-300 mb-2">Store ID</label>
                       <input
                           className={`w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent ${userRole === 'STORE_OWNER' ? 'opacity-50 cursor-not-allowed bg-gray-800' : ''}`}
                           id="store_id" name="store_id"
@@ -447,7 +449,7 @@ export default function ForecastingDashboard() {
 
                   {/* Price */}
                   <div>
-                      <label className="block text-sm font-medium text-gray-300 mb-2">
+                      <label htmlFor="price" className="block text-sm font-medium text-gray-300 mb-2">
                           Price ($) {priceLoading && <span className="text-xs text-gray-500">loading actual price...</span>}
                       </label>
                       <input
@@ -466,7 +468,7 @@ export default function ForecastingDashboard() {
                       meaningless. */}
                   <div className="grid grid-cols-1 gap-4">
                       <div>
-                          <label className="block text-sm font-medium text-gray-300 mb-2">SNAP Day</label>
+                          <label htmlFor="is_snap_day" className="block text-sm font-medium text-gray-300 mb-2">SNAP Day</label>
                           <select
                               className="w-full appearance-none bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent"
                               id="is_snap_day" name="is_snap_day"
@@ -481,6 +483,7 @@ export default function ForecastingDashboard() {
                   {/* Submit Button */}
                   <button
                       type="submit" disabled={loading || itemsLoading}
+                      aria-busy={loading}
                       className="w-full py-3 px-6 rounded-lg text-white font-semibold text-sm uppercase tracking-wider transition-all duration-200 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                       style={{ backgroundColor: WALMART_BLUE }}
                   >
@@ -567,7 +570,11 @@ export default function ForecastingDashboard() {
                       Daily Forecast Distribution (28 Days)
                   </h3>
                   {predictions && predictions.length > 0 ? (
-                      <div className="h-72">
+                      <div
+                          className="h-72"
+                          role="img"
+                          aria-label={`Bar chart of daily forecast units over ${FORECAST_DAYS} days. Total ${totalPredicted.toFixed(1)} units, average ${avgPredicted} per day, peak ${maxPredicted} units.`}
+                      >
                           <ResponsiveContainer width="100%" height="100%">
                               <BarChart data={predictions.map((p, i) => ({ day: `Day ${i + 1}`, sales: p }))}>
                                   <CartesianGrid strokeDasharray="3 3" stroke="#374151" vertical={false} />
@@ -635,6 +642,17 @@ export default function ForecastingDashboard() {
                   )}
               </div>
           </div>
+
+          {/* Model explanation */}
+          {predictions && predictions.length > 0 && (
+              <div className="mb-6">
+                  <ForecastExplanation
+                      itemId={formData.item_id}
+                      storeId={formData.store_id}
+                      days={FORECAST_DAYS}
+                  />
+              </div>
+          )}
 
           {/* Main Chart - Historical vs Predicted */}
           <div className="bg-gray-900 rounded-xl border border-gray-800 p-6">

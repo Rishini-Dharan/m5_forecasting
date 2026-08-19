@@ -117,7 +117,9 @@ Useful flags: `--stores CA_1 TX_1`, `--items 200`, `--days 28`, `--no-truncate`.
 | `GET` | `/auth/users` | Admin only |
 | `POST` | `/api/predict` | 1-28 day forecast; optional `price` / `is_snap_day` what-if |
 | `GET` | `/api/model/info` | Status only — never triggers a model download |
-| `GET` | `/api/model/feature-importance` | Real gain-based importance from the boosters |
+| `GET` | `/api/model/feature-importance` | Global gain-based importance from the boosters |
+| `GET` | `/api/model/explain` | Per-forecast SHAP drivers, in plain language |
+| `GET` | `/api/model/features` | Plain-language description of all 34 features |
 | `POST` | `/api/data/historical` | Real sales from the database |
 | `GET` | `/api/data/price` | Real recorded `sell_price` for a series |
 | `GET` | `/api/data/stores`, `/api/data/items`, `/api/data/store/{id}`, `/api/data/insights` | Scoped to the caller |
@@ -127,6 +129,42 @@ Useful flags: `--stores CA_1 TX_1`, `--items 200`, `--days 28`, `--no-truncate`.
 `ADMIN` reaches every store. `STORE_OWNER` reaches only its assigned store — and a
 `STORE_OWNER` with no assigned store reaches **nothing**, which is enforced in one place
 (`utils/authz.py`) rather than repeated per route.
+
+## Explainability
+
+`/api/model/explain` answers "why this number?" using LightGBM's own SHAP contributions
+(`pred_contrib=True`). These models use a Tweedie objective with a log link, so
+`exp(base + Σ contributions)` reconstructs the prediction **exactly** — the attribution is not
+a post-hoc approximation of the model, it is the model.
+
+Working in log space also makes each driver readable as a multiplier:
+
+```
+A typical item at CA_1 averages 0.59 units/day.
+  Avg sales, last 28 days     1.19x  increases
+  Volatility, last 28 days    1.10x  increases
+  Avg sales, last 180 days    1.08x  increases  (approx)
+  Avg sales, last 7 days      1.05x  increases
+-> 1.01 units/day for FOODS_1_001 at CA_1
+```
+
+Drivers marked **approx** are the features listed in `APPROXIMATED_FEATURES` — their direction
+is reliable, their exact magnitude is indicative. Every feature also carries a human-readable
+label and description (`backend/models/feature_glossary.py`), so the UI never shows a raw
+identifier like `lag_7_div_rolling_28`.
+
+## Accessibility
+
+- Every form control has an associated `<label htmlFor>`, and inputs declare `autoComplete`.
+- Errors render in `role="alert"` containers; status messages use `role="status"`.
+- Forecast completion is announced through an `aria-live` region.
+- Charts carry `role="img"` with a text summary, since the SVG itself conveys nothing to a
+  screen reader. The explanation panel is a real list with text values rather than a chart.
+- A "Skip to forecast" link, a labelled `<nav>`, and a `<main>` landmark support keyboard
+  navigation.
+- A visible focus ring is defined for all interactive elements — the dark theme had been
+  relying on the near-invisible browser default.
+- `prefers-reduced-motion` is honoured.
 
 ## Configuration
 

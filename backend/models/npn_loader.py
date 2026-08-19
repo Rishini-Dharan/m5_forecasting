@@ -37,6 +37,7 @@ import pandas as pd
 from huggingface_hub import hf_hub_download
 
 from config import settings
+from models import feature_glossary
 
 logger = logging.getLogger(__name__)
 
@@ -393,3 +394,84 @@ def latest_price(item_id: str, store_id: str) -> float:
     if price.empty:
         raise ModelUnavailable(f"No price on record for {item_id} at {store_id}")
     return round(float(price.iloc[-1]), 2)
+
+
+# --- explainability -------------------------------------------------------------------------
+
+def explain_forecast(item_id: str, store_id: str, days: int = MAX_HORIZON,
+                     top_n: int = 8) -> dict:
+    """Per-forecast explanation from LightGBM's exact SHAP contributions.
+
+    `pred_contrib=True` returns one contribution per feature plus a base value, and they sum to
+    the raw margin. These models use a Tweedie objective with a log link, so
+    exp(base + sum(contributions)) reconstructs the prediction exactly -- there is no
+    approximation in the attribution itself.
+
+    Working in log space means each contribution is naturally read as a multiplier:
+    +0.13 in log space is a 1.14x lift. Contributions are averaged across the horizon, so this
+    explains the overall level of the forecast rather than one particular day.
+
+    The caveats from `_build_feature_rows` still apply: the features listed in
+    APPROXIMATED_FEATURES could not be reconstructed from the published 57-day tail, so their
+    attributions are indicative rather than exact. They are flagged in the response.
+    """
+    names = feature_names()
+    frame = _build_feature_rows(item_id, store_id, days)
+
+    total_contrib = np.zeros(len(names), dtype=float)
+    total_base = 0.0
+    rows_seen = 0
+
+    for block in HBLOCKS:
+        mask = (frame["_horizon_day"] >= block[0]) & (frame["_horizon_day"] <= block[1])
+        if not mask.any():
+            continue
+        booster = _get_booster(store_id, block)
+        matrix = booster.predict(
+            frame.loc[mask, names].to_numpy(dtype=float), pred_contrib=True
+        )
+        total_contrib += matrix[:, :-1].sum(axis=0)
+        total_base += float(matrix[:, -1].sum())
+        rows_seen += int(mask.sum())
+
+    if not rows_seen:
+        raise ModelUnavailable("No rows available to explain")
+
+    mean_contrib = total_contrib / rows_seen
+    mean_base = total_base / rows_seen
+
+    ranked = sorted(zip(names, mean_contrib), key=lambda pair: -abs(pair[1]))[:top_n]
+    drivers = []
+    for name, value in ranked:
+        entry = feature_glossary.describe(name)
+        entry.update({
+            # Log-space contribution, and the same thing as a multiplier on the forecast.
+            "contribution": round(float(value), 4),
+            "multiplier": round(float(np.exp(value)), 4),
+            "direction": "increases" if value > 0 else "decreases",
+            "value": round(float(frame[name].mean()), 4),
+            "approximate": name in APPROXIMATED_FEATURES,
+        })
+        drivers.append(entry)
+
+    baseline_units = float(np.exp(mean_base))
+    explained_units = float(np.exp(mean_base + mean_contrib.sum()))
+
+    return {
+        "item_id": item_id,
+        "store_id": store_id,
+        "horizon_days": days,
+        "method": "LightGBM SHAP (pred_contrib), averaged over the horizon, log link",
+        # What the model would predict knowing nothing about this series.
+        "base_units_per_day": round(baseline_units, 4),
+        "explained_units_per_day": round(explained_units, 4),
+        "drivers": drivers,
+        "approximated_features": [
+            name for name, _ in ranked if name in APPROXIMATED_FEATURES
+        ],
+    }
+
+
+def feature_catalog() -> list:
+    """Every feature the model uses, described in plain language."""
+    return [feature_glossary.describe(name) for name in feature_names()]

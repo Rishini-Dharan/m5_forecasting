@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { ENDPOINTS } from '../config';
+import { extractErrorMessage, toMessage } from '../lib/api';
 
 export default function LoginPage() {
     const navigate = useNavigate();
@@ -42,14 +43,10 @@ export default function LoginPage() {
                     navigate('/dashboard');
                 }
             } else {
-                if (Array.isArray(data.detail)) {
-                    setError(data.detail[0].msg || 'Validation Error');
-                } else {
-                    setError(data.detail || 'Login failed');
-                }
+                setError(extractErrorMessage(data, 'Login failed'));
             }
-        } catch (err: any) {
-            setError(err.message || 'An error occurred');
+        } catch (err: unknown) {
+            setError(toMessage(err, 'An error occurred'));
         } finally {
             setLoading(false);
         }
@@ -75,22 +72,24 @@ export default function LoginPage() {
                 </div>
                 
                 {message && (
-                    <div className="mb-6 p-3 bg-[#4ade80]/10 border border-[#4ade80]/30 rounded-lg text-center text-[#4ade80] font-body-sm">
+                    <div role="status" className="mb-6 p-3 bg-[#4ade80]/10 border border-[#4ade80]/30 rounded-lg text-center text-[#4ade80] font-body-sm">
                         {message}
                     </div>
                 )}
                 {error && (
-                    <div className="mb-6 p-3 bg-[#ef4444]/10 border border-[#ef4444]/30 rounded-lg text-center text-[#ef4444] font-body-sm">
+                    <div role="alert" className="mb-6 p-3 bg-[#ef4444]/10 border border-[#ef4444]/30 rounded-lg text-center text-[#ef4444] font-body-sm">
                         {error}
                     </div>
                 )}
 
                 <form onSubmit={handleLogin} className="flex flex-col gap-5">
                     <div className="flex flex-col gap-1.5">
-                        <label className="font-label-caps text-[11px] tracking-widest text-on-surface-variant uppercase">Email</label>
+                        <label className="font-label-caps text-[11px] tracking-widest text-on-surface-variant uppercase" htmlFor="email">EMAIL</label>
                         <input 
                             type="email"
-                            name="email" 
+                            id="email"
+                            name="email"
+                            autoComplete="email" 
                             value={formData.email} 
                             onChange={handleChange} 
                             className="bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-primary-container transition-colors font-body-md w-full placeholder:text-white/20" 
@@ -101,10 +100,12 @@ export default function LoginPage() {
                     </div>
                     
                     <div className="flex flex-col gap-1.5">
-                        <label className="font-label-caps text-[11px] tracking-widest text-on-surface-variant uppercase">Password</label>
+                        <label className="font-label-caps text-[11px] tracking-widest text-on-surface-variant uppercase" htmlFor="password">PASSWORD</label>
                         <input 
-                            type="password" 
-                            name="password" 
+                            type="password"
+                            id="password"
+                            name="password"
+                            autoComplete="current-password" 
                             value={formData.password} 
                             onChange={handleChange} 
                             className="bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-primary-container transition-colors font-body-md w-full" 

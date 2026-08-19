@@ -70,3 +70,33 @@ def test_feature_importance_is_ranked_and_normalised():
     assert all(0 <= entry["share"] <= 1 for entry in importance)
     # rolling_mean_7 dominates this model by a wide margin.
     assert importance[0]["feature"] == "rolling_mean_7"
+
+
+def test_explanation_reconstructs_the_prediction():
+    """SHAP contributions must sum back to the model output, not merely correlate with it."""
+    result = npn_loader.explain_forecast("FOODS_1_001", "CA_1", days=7, top_n=34)
+    total = sum(d["contribution"] for d in result["drivers"])
+    import math
+    rebuilt = result["base_units_per_day"] * math.exp(total)
+    assert rebuilt == pytest.approx(result["explained_units_per_day"], rel=1e-3)
+
+
+def test_explanation_is_ranked_by_absolute_impact():
+    result = npn_loader.explain_forecast("FOODS_1_001", "CA_1", days=7, top_n=6)
+    impacts = [abs(d["contribution"]) for d in result["drivers"]]
+    assert impacts == sorted(impacts, reverse=True)
+    assert len(result["drivers"]) == 6
+
+
+def test_explanation_flags_approximated_features():
+    result = npn_loader.explain_forecast("FOODS_1_001", "CA_1", days=7, top_n=34)
+    flagged = {d["feature"] for d in result["drivers"] if d["approximate"]}
+    assert flagged == set(npn_loader.APPROXIMATED_FEATURES) & {d["feature"] for d in result["drivers"]}
+
+
+def test_every_feature_has_a_plain_language_label():
+    catalog = npn_loader.feature_catalog()
+    assert len(catalog) == 34
+    for entry in catalog:
+        assert entry["label"] and entry["label"] != entry["feature"], entry["feature"]
+        assert entry["description"].endswith(".")

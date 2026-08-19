@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import { Link } from 'react-router-dom';
 import { ENDPOINTS } from '../config';
+import { errorFromResponse, toMessage } from '../lib/api';
 
 interface InsightData {
   data_available: boolean;
@@ -45,12 +46,12 @@ export default function InsightsDashboard() {
                     }
                 });
                 if (!response.ok) {
-                    throw new Error('Failed to fetch insights data');
+                    throw new Error(await errorFromResponse(response, 'Failed to fetch insights data'));
                 }
                 const jsonData: InsightData = await response.json();
                 setData(jsonData);
-            } catch (err: any) {
-                setError(err.message || 'An error occurred while loading insights.');
+            } catch (err: unknown) {
+                setError(toMessage(err, 'An error occurred while loading insights.'));
             } finally {
                 setLoading(false);
             }

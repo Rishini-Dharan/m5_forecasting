@@ -11,6 +11,8 @@ export const ENDPOINTS = {
     predict: `${API_BASE_URL}/api/predict`,
     modelInfo: `${API_BASE_URL}/api/model/info`,
     featureImportance: `${API_BASE_URL}/api/model/feature-importance`,
+    explain: `${API_BASE_URL}/api/model/explain`,
+    features: `${API_BASE_URL}/api/model/features`,
   },
   data: {
     historical: `${API_BASE_URL}/api/data/historical`,

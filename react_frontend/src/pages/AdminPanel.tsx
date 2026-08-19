@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { ENDPOINTS } from '../config';
+import { extractErrorMessage, toMessage } from '../lib/api';
 
 interface User {
     id: number;
@@ -49,10 +50,10 @@ export default function AdminPanel() {
                 setStatus({ type: 'success', msg: data.message || 'User created successfully!' });
                 setFormData({ email: '', password: '', role: 'STORE_OWNER', store_id: '' });
             } else {
-                setStatus({ type: 'error', msg: data.detail || 'Failed to create user.' });
+                setStatus({ type: 'error', msg: extractErrorMessage(data, 'Failed to create user.') });
             }
-        } catch (err: any) {
-            setStatus({ type: 'error', msg: err.message || 'An error occurred.' });
+        } catch (err: unknown) {
+            setStatus({ type: 'error', msg: toMessage(err, 'An error occurred.') });
         } finally {
             setLoading(false);
         }
