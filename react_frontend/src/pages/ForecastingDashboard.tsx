@@ -45,6 +45,8 @@ export default function ForecastingDashboard() {
     const [impactData, setImpactData] = useState<any[]>([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [items, setItems] = useState<string[]>([]);
+    const [itemsLoading, setItemsLoading] = useState(true);
 
     // Sync URL param changes to the form data
     useEffect(() => {
@@ -52,6 +54,34 @@ export default function ForecastingDashboard() {
             setFormData(prev => ({ ...prev, store_id: storeId || 'CA_1' }));
         }
     }, [storeId, userRole]);
+
+    // Fetch items for dropdown
+    useEffect(() => {
+        const fetchItems = async () => {
+            try {
+                const response = await fetch(ENDPOINTS.data.items, {
+                    headers: {
+                        'Authorization': `Bearer ${localStorage.getItem('jwt') || ''}`
+                    }
+                });
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.items && data.items.length > 0) {
+                        setItems(data.items);
+                        // Set default item if not already set
+                        if (!formData.item_id || !data.items.includes(formData.item_id)) {
+                            setFormData(prev => ({ ...prev, item_id: data.items[0] }));
+                        }
+                    }
+                }
+            } catch (e) {
+                console.error('Failed to fetch items:', e);
+            } finally {
+                setItemsLoading(false);
+            }
+        };
+        fetchItems();
+    }, []);
 
     const handlePredict = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -228,12 +258,23 @@ export default function ForecastingDashboard() {
                                 <label className="font-label-caps text-[12px] uppercase tracking-widest text-secondary block" htmlFor="item_id">
                                     Item ID
                                 </label>
-                                <input
-                                    className="bg-transparent border-0 border-b border-white/20 rounded-none text-[#e3e2e2] px-0 py-2 w-full font-mono text-sm transition-all focus:outline-none focus:border-primary focus:shadow-[0_0_4px_rgba(212,175,55,0.5)] focus:pl-2"
-                                    id="item_id" name="item_id"
-                                    placeholder="e.g. HOBBIES_1_001" type="text"
-                                    value={formData.item_id} onChange={handleChange} required
-                                />
+                                {itemsLoading ? (
+                                    <div className="bg-transparent border-0 border-b border-white/20 rounded-none px-0 py-2 w-full font-mono text-sm text-secondary">
+                                        Loading items...
+                                    </div>
+                                ) : (
+                                    <select
+                                        className="bg-transparent border-0 border-b border-white/20 rounded-none text-[#e3e2e2] px-0 py-2 w-full font-mono text-sm appearance-none transition-all focus:outline-none focus:border-primary focus:shadow-[0_0_4px_rgba(212,175,55,0.5)] focus:pl-2"
+                                        id="item_id" name="item_id"
+                                        value={formData.item_id} onChange={handleChange} required
+                                    >
+                                        {items.map((item) => (
+                                            <option key={item} value={item} className="bg-[#1a1c1c]">
+                                                {item}
+                                            </option>
+                                        ))}
+                                    </select>
+                                )}
                             </div>
 
                             <div className="space-y-2">

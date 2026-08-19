@@ -76,6 +76,32 @@ def get_stores(current_user: dict = Depends(get_current_user)):
         logger.error(f"Error fetching stores: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+@router.get("/items")
+def get_items(current_user: dict = Depends(get_current_user)):
+    """Get list of all items from the database."""
+    try:
+        # For STORE_OWNER, filter items by their store
+        store_filter = ""
+        params = []
+        if current_user.get("role") == "STORE_OWNER":
+            user_store = current_user.get("store_id")
+            if user_store:
+                store_filter = "WHERE store_id = %s"
+                params = [user_store]
+        
+        query = f"""
+            SELECT DISTINCT item_id 
+            FROM historical_sales 
+            {store_filter}
+            ORDER BY item_id
+        """
+        results = db.execute_query(query, params if params else None, fetch=True)
+        items = list(set(r["item_id"] for r in results)) if results else []
+        return {"items": items}
+    except Exception as e:
+        logger.error(f"Error fetching items: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 @router.get("/store/{store_id}")
 def get_store_details(store_id: str, current_user: dict = Depends(get_current_user)):
     """Get details for a specific store including items and metrics."""

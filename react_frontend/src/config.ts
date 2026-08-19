@@ -14,5 +14,6 @@ export const ENDPOINTS = {
     historical: `${API_BASE_URL}/api/data/historical`,
     insights: `${API_BASE_URL}/api/data/insights`,
     stores: `${API_BASE_URL}/api/data/stores`,
+    items: `${API_BASE_URL}/api/data/items`,
   },
 } as const;
