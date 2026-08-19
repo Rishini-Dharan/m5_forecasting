@@ -43,6 +43,9 @@ class PredictionResponse(BaseModel):
 
 
 class ModelInfoResponse(BaseModel):
+    # `model_loaded` collides with Pydantic's reserved "model_" namespace and warns on import.
+    model_config = {"protected_namespaces": ()}
+
     status: str
     model_loaded: bool
     repo: str

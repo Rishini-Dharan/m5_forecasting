@@ -21,6 +21,9 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("Starting up M5 Forecasting Engine...")
+    # Logged because a mismatch here fails in the browser as an opaque "Failed to fetch",
+    # with nothing in the server log to point at CORS.
+    logger.info("CORS origins allowed: %s", settings.CORS_ORIGINS)
     try:
         init_db()
     except Exception:

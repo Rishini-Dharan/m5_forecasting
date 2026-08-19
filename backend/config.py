@@ -23,12 +23,15 @@ class Settings:
     JWT_EXPIRATION_HOURS: int = 24
     # Hugging Face repo holding the trained M5 models and their artifacts.
     NPN_REPO: str = os.getenv("NPN_REPO", "rishini/NPN")
+    # Trailing slashes are stripped. A browser sends `Origin: https://host` with no path, so
+    # Starlette's exact string match fails against "https://host/" and every request silently
+    # loses its CORS headers -- which surfaces in the UI only as "Failed to fetch".
     CORS_ORIGINS: list = [
-        origin.strip()
+        origin.strip().rstrip("/")
         for origin in os.getenv(
             "CORS_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173"
         ).split(",")
-        if origin.strip()
+        if origin.strip().rstrip("/")
     ]
     LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO")
     ENVIRONMENT: str = os.getenv("ENVIRONMENT", "development")

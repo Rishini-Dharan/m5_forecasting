@@ -92,3 +92,32 @@ def test_all_data_routes_require_auth(client):
     for path in ["/api/data/stores", "/api/data/items", "/api/data/insights",
                  "/api/data/store/CA_1", "/api/data/price?item_id=X&store_id=CA_1"]:
         assert client.get(path).status_code == 403, path
+
+
+def test_cors_origins_strip_trailing_slashes(monkeypatch):
+    """A trailing slash in CORS_ORIGINS silently broke every browser request.
+
+    Browsers send `Origin: https://host` with no path, so Starlette's exact match never
+    hit "https://host/" and the response came back with no CORS headers at all.
+    """
+    import importlib
+
+    monkeypatch.setenv("CORS_ORIGINS", "https://a.vercel.app/, https://b.vercel.app , ")
+    import config
+
+    importlib.reload(config)
+    assert config.Settings().CORS_ORIGINS == ["https://a.vercel.app", "https://b.vercel.app"]
+    monkeypatch.delenv("CORS_ORIGINS")
+    importlib.reload(config)
+
+
+def test_cors_headers_returned_for_allowed_origin(client, monkeypatch):
+    origin = "http://localhost:5173"
+    response = client.options(
+        "/api/model/info",
+        headers={
+            "Origin": origin,
+            "Access-Control-Request-Method": "GET",
+        },
+    )
+    assert response.headers.get("access-control-allow-origin") == origin
